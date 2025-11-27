@@ -453,35 +453,55 @@ namespace NanoJson {
 			this.InnerCount = -1;
 		}
 
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		/// <param name="key">Key or Path to desired value</param>
+		/// <returns></returns>
+		/// <exception cref="ArgumentException">Key was not found in object</exception>
+		/// <exception cref="InvalidOperationException">NanoJson value is not an object, search not supported</exception>
 		public NanoJson this[string path] => this[path.AsSpan()];
 
-		public NanoJson this[ReadOnlySpan<char> path]
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		/// <param name="key">Key or Path to desired value</param>
+		/// <returns></returns>
+		/// <exception cref="ArgumentException">Key was not found in object</exception>
+		/// <exception cref="InvalidOperationException">NanoJson value is not an object, search not supported</exception>
+		public NanoJson this[ReadOnlySpan<char> key]
 		{
 			get
 			{
-				int pathLen = path.Length;
+				int pathLen = key.Length;
 				switch (this.Type) {
 					case JsonType.Object:
 						for (int x = 0; x < this.InnerCount; x++) {
 							NanoJson value = this.InnerValues[x];
 							ReadOnlySpan<char> valueKey = value.KeyData.Span;
 							int len = valueKey.Length;
-							if (pathLen >= len && path.StartsWith(valueKey)) {
+							if (pathLen >= len && key.StartsWith(valueKey)) {
 								if (pathLen == len) {
 									return value;
 								}
-								else if (path[len] == '.') {
-									return value[path[++len..]];
+								else if (key[len] == '.') {
+									return value[key[++len..]];
 								}
 							}
 						}
-						throw new ArgumentException($"Path provided was invalid [{path.ToString()}]", nameof(path));
+						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
 					default:
 						throw new InvalidOperationException();
 				}
 			}
 		}
 
+		/// <summary>
+		/// Get value at index of the contained NanoJson values
+		/// </summary>
+		/// <param name="index"></param>
+		/// <returns></returns>
+		/// <exception cref="IndexOutOfRangeException"></exception>
 		public NanoJson this[int index]
 		{
 			get
@@ -496,6 +516,11 @@ namespace NanoJson {
 			}
 		}
 
+		/// <summary>
+		/// Process known JsonArray to populated this.InnerValues
+		/// </summary>
+		/// <param name="reference">Value found after the colon</param>
+		/// <param name="len">Length of the reference area</param>
 		private void ProcessJsonArray(ReadOnlyMemory<char> reference, int len) {
 			ReadOnlySpan<char> data = reference.Span;
 			int x = 0;
@@ -549,6 +574,11 @@ namespace NanoJson {
 			}
 		}
 
+		/// <summary>
+		/// Process known JsonObject to populated this.InnerValues
+		/// </summary>
+		/// <param name="reference">Value found after the colon</param>
+		/// <param name="len">Length of the reference area</param>
 		private void ProcessJsonObject(ReadOnlyMemory<char> reference, int len) {
 			ReadOnlySpan<char> data = reference.Span;
 
@@ -620,8 +650,15 @@ namespace NanoJson {
 			return sb.ToString();
 		}
 
-		private void ProcessString(bool AsValue, bool pretty, ref int indent, in StringBuilder sb) { // Can be better, indenting seems off
-			const string tabs = "   ";
+		/// <summary>
+		/// Recursive method to build the json ToString output
+		/// </summary>
+		/// <param name="AsValue"></param>
+		/// <param name="pretty"></param>
+		/// <param name="indent"></param>
+		/// <param name="sb"></param>
+		private void ProcessString(bool AsValue, bool pretty, ref int indent, in StringBuilder sb) {
+			const string tabs = "   "; // Can be better, indenting seems off
 
 			int refLen;
 			switch (this.Type) {
@@ -758,16 +795,34 @@ namespace NanoJson {
 
 		public string GetString => this.ReferenceData.ToString();
 
+		/// <summary>
+		/// Get the data used inside This object
+		/// </summary>
 		public ReadOnlySpan<char> GetSpan => this.ReferenceData.Span;
 
-		public double GetValue => double.Parse(this.ReferenceData.Span);
+		/// <summary>
+		/// Get the number contained inside This object
+		/// </summary>
+		public double GetNumber => double.Parse(this.ReferenceData.Span);
 
+		/// <summary>
+		/// Get the values contained inside This object
+		/// </summary>
 		public NanoJson[] GetContainedArray => this.InnerValues;
 
+		/// <summary>
+		/// Get if This object is Null
+		/// </summary>
 		public bool IsNull => this.Type == JsonType.Null;
 
+		/// <summary>
+		/// Get the bool value of This object
+		/// </summary>
 		public bool GetBool => bool.Parse(this.ReferenceData.Span);
 
+		/// <summary>
+		/// Get the key of This object
+		/// </summary>
 		public string GetKey
 		{
 			get
@@ -781,14 +836,48 @@ namespace NanoJson {
 			}
 		}
 
+		/// <summary>
+		/// Get the key of This object
+		/// </summary>
+		public ReadOnlySpan<char> GetKeyAsSpan
+		{
+			get
+			{
+				if (this.KeyData.IsEmpty) {
+					return ReadOnlySpan<char>.Empty;
+				}
+				else {
+					return this.KeyData.Span;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Compare the key of This object
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public bool CompareKey(string key) => this.CompareKey(key.AsSpan());
-		public bool CompareKey(ReadOnlyMemory<char> key) => this.CompareKey(key.Span);
+		/// <summary>
+		/// Compare the key of This object
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public bool CompareKey(ReadOnlySpan<char> key) {
 			return MemoryExtensions.SequenceEqual(key, KeyData.Span);
 		}
 
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns>Key Found</returns>
 		public bool ContainsKey(string key) => this.ContainsKey(key.AsSpan());
-		public bool ContainsKey(ReadOnlyMemory<char> key) => this.ContainsKey(key.Span);
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns>Key Found</returns>
 		public bool ContainsKey(ReadOnlySpan<char> key) {
 			int indexSeperator = key.IndexOf('.');
 			bool end = indexSeperator == -1;
@@ -820,6 +909,7 @@ namespace NanoJson {
 
 		public IEnumerator<NanoJson> GetEnumerator() {
 			switch (this.Type) {
+				case JsonType.Object:
 				case JsonType.Array:
 					foreach (NanoJson v in this.InnerValues) {
 						yield return v;
