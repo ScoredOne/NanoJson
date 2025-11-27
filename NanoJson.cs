@@ -1,4 +1,16 @@
-﻿using System;
+﻿///////////////////////////////////////////////////
+///												///
+///		NanoJson by Duncan 'ScoredOne' Mellor	///
+///												///
+///		Released under the MIT license			///
+///												///
+///		Thursday 27th November 2025				///
+///												///
+///		Software provided in as-is condition	///
+///												///
+///////////////////////////////////////////////////
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;

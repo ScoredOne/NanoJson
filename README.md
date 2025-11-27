@@ -1,26 +1,26 @@
 # NanoJson
 
-C# Class of a Json Parser by Duncan 'ScoredOne' Mellor
+<br>C# Class of a Json Parser by Duncan 'ScoredOne' Mellor<br>
 
-NetStandard 2.1
+<br>NetStandard 2.1<br>
 
-Small and simple Json Parser to minimise memory allocation of Json.
-Theory;
+<br>Small and simple Json Parser to minimise memory allocation of Json.<br>
+Theory;<br>
 - String goes in
 - Get Memory of String
 - Translate memory area into key and value information not creating new regions or allocations unneccessarily like arrays
 
 
-Nuget coming soon
+<br>Nuget coming soon <br>
 
-Net 9 Summary
-// * Summary *
+Net 9 Summary<br>
+// * Summary *<br>
 
-BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6575/22H2/2022Update)
-AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores
-.NET SDK 9.0.307
-  [Host]     : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2 [AttachedDebugger]
-  DefaultJob : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2
+BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6575/22H2/2022Update)<br>
+AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores<br>
+.NET SDK 9.0.307<br>
+  [Host]     : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2 [AttachedDebugger]<br>
+  DefaultJob : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2<br>
 
 
 | Method         | format        | Mean     | Error   | StdDev  | Gen0    | Gen1    | Gen2    | Allocated |
@@ -38,7 +38,7 @@ AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores
 | LightJson      | ParseReformat | 460.4 us | 2.19 us | 1.83 us | 43.4570 |       - |       - | 710.34 KB |
 | NewtonsoftJson | ParseReformat | 652.2 us | 4.20 us | 3.93 us | 55.6641 | 44.9219 |       - | 911.05 KB |
 
-format:
-Just Parse        = Create object of library and parse json file into it. No output requested from object.
-Parse to String   = Create object of library and parse json file into it. Take created object and request string of object.
-Parse Reformat    = Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.
+format:<br>
+JustParse        = Create object of library and parse json file into it. No output requested from object.<br>
+ParseToString   = Create object of library and parse json file into it. Take created object and request string of object.<br>
+ParseReformat    = Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.<br>
