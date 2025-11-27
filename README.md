@@ -24,15 +24,15 @@ AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores<br>
 
 | Method         | format        | Mean     | Error   | StdDev  | Gen0    | Gen1    | Gen2    | Allocated |
 |--------------- |-------------- |---------:|--------:|--------:|--------:|--------:|--------:|----------:|
-| ScoredJson     | JustParse     | 344.0 us | 0.72 us | 0.60 us |  4.3945 |  0.9766 |       - |  73.17 KB |
+| NanoJson       | JustParse     | 344.0 us | 0.72 us | 0.60 us |  4.3945 |  0.9766 |       - |  73.17 KB |
 | SystemTextJson | JustParse     | 134.7 us | 0.69 us | 0.64 us |  5.6152 |  0.4883 |       - |  93.48 KB |
 | LightJson      | JustParse     | 330.9 us | 2.82 us | 2.64 us | 32.2266 | 14.1602 |       - | 529.73 KB |
 | NewtonsoftJson | JustParse     | 462.0 us | 2.90 us | 2.71 us | 36.6211 | 24.4141 |       - | 601.63 KB |
-| ScoredJson     | ParseToString | 421.5 us | 0.60 us | 0.53 us | 30.2734 | 30.2734 | 30.2734 | 262.31 KB |
+| NanoJson       | ParseToString | 421.5 us | 0.60 us | 0.53 us | 30.2734 | 30.2734 | 30.2734 | 262.31 KB |
 | SystemTextJson | ParseToString | 246.6 us | 1.28 us | 1.20 us | 27.3438 | 27.3438 | 27.3438 | 179.43 KB |
 | LightJson      | ParseToString | 485.9 us | 2.90 us | 2.57 us | 41.9922 | 20.5078 |       - | 698.18 KB |
 | NewtonsoftJson | ParseToString | 616.7 us | 2.44 us | 2.29 us | 54.6875 | 53.7109 | 27.3438 | 783.18 KB |
-| ScoredJson     | ParseReformat | 394.8 us | 2.07 us | 1.73 us | 14.1602 |  2.4414 |       - |  233.7 KB |
+| NanoJson       | ParseReformat | 394.8 us | 2.07 us | 1.73 us | 14.1602 |  2.4414 |       - |  233.7 KB |
 | SystemTextJson | ParseReformat | 356.6 us | 2.57 us | 2.14 us | 25.3906 | 15.6250 |       - | 437.17 KB |
 | LightJson      | ParseReformat | 460.4 us | 2.19 us | 1.83 us | 43.4570 |       - |       - | 710.34 KB |
 | NewtonsoftJson | ParseReformat | 652.2 us | 4.20 us | 3.93 us | 55.6641 | 44.9219 |       - | 911.05 KB |
