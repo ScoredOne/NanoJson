@@ -1,7 +1,5 @@
 # NanoJson
 
-<br>C# Class of a Json Parser by Duncan 'ScoredOne' Mellor<br>
-
 <br>NetStandard 2.1<br>
 
 <br>Small and simple Json Parser to minimise memory allocation of Json.<br>
