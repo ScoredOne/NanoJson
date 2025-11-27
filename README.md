@@ -10,10 +10,11 @@ Theory;<br>
 - Get Memory of String
 - Translate memory area into key and value information not creating new regions or allocations unneccessarily like arrays
 
-
 <br>Nuget coming soon <br>
+<br>TODO:
+- Reformate ToString to pre determine the size needed for the string builder container to stop resize allocations occuring there.
 
-Net 9 Summary<br>
+<br>Net 9 Summary<br>
 // * Summary *<br>
 
 BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6575/22H2/2022Update)<br>
