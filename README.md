@@ -6,7 +6,7 @@
 Theory;<br>
 - String goes in
 - Get Memory of String
-- Translate memory area into key and value information not creating new regions or allocations unneccessarily like arrays
+- Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
 
 <br>Nuget coming soon <br>
 
