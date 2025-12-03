@@ -474,18 +474,8 @@ namespace NanoJson {
 				int pathLen = key.Length;
 				switch (this.Type) {
 					case JsonType.Object:
-						for (int x = 0; x < this.InnerCount; x++) {
-							NanoJson value = this.InnerValues[x];
-							ReadOnlySpan<char> valueKey = value.KeyData.Span;
-							int len = valueKey.Length;
-							if (pathLen >= len && key.StartsWith(valueKey)) {
-								if (pathLen == len) {
-									return value;
-								}
-								else if (key[len] == '.') {
-									return value[key[++len..]];
-								}
-							}
+						if (this.ContainsKey(key, out NanoJson found)) {
+							return found;
 						}
 						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
 					default:
@@ -1048,38 +1038,32 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns>Key Found</returns>
-		public bool ContainsKey(string key) => this.ContainsKey(key.AsSpan());
+		public bool ContainsKey(string key, out NanoJson found) => this.ContainsKey(key.AsSpan(), out found);
 		/// <summary>
 		/// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns>Key Found</returns>
-		public bool ContainsKey(ReadOnlySpan<char> key) {
-			int indexSeperator = key.IndexOf('.');
-			bool end = indexSeperator == -1;
-			if (end && this.CompareKey(key)) {
-				return true;
-			}
-
-			ReadOnlySpan<char> currentStep = end ? key : key[..indexSeperator];
-			ReadOnlySpan<char> nextStep = end ? ReadOnlySpan<char>.Empty : key[++indexSeperator..];
-			if (end) {
-				for (int x = 0; x < this.InnerCount; x++) {
-					NanoJson value = this.InnerValues[x];
-					if (value.ContainsKey(currentStep)) {
+		public bool ContainsKey(ReadOnlySpan<char> key, out NanoJson found) {
+			int pathLen = key.Length;
+			for (int x = 0; x < this.InnerCount; x++) {
+				NanoJson value = this.InnerValues[x];
+				ReadOnlySpan<char> valueKey = value.KeyData.Span;
+				int len = valueKey.Length;
+				if (pathLen == len) {
+					if (key.StartsWith(valueKey)) {
+						found = value;
 						return true;
 					}
 				}
-			}
-			else {
-				for (int x = 0; x < this.InnerCount; x++) {
-					NanoJson value = this.InnerValues[x];
-					if (value.ContainsKey(nextStep)) {
+				else if (pathLen > len) {
+					if (key.StartsWith(valueKey) && value.ContainsKey(key[++len..], out found)) {
 						return true;
 					}
 				}
 			}
 
+			found = NanoJson.Empty;
 			return false;
 		}
 
