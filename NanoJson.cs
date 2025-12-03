@@ -17,7 +17,7 @@ using System.Collections.Generic;
 
 namespace NanoJson {
 
-	public readonly struct NanoJson : IEnumerable<NanoJson> {
+	public readonly struct NanoJson : IEnumerable<NanoJson>, IEquatable<NanoJson> {
 
 		private const string INDENT_TABS = "   "; // Can be better, indenting seems off
 		private const int INDENT_LEN = 3;
@@ -512,24 +512,20 @@ namespace NanoJson {
 		private void ProcessJsonArray(ReadOnlyMemory<char> reference, int len) {
 			ReadOnlySpan<char> data = reference.Span;
 			int x = 0;
-			int y = 0;
-			int debth = 0;
+			while (data[x++] != '[') { }
+			int y = x;
+			int debth = 1;
 			int index = 0;
 			int innerSize;
 
-			while (x < len) {
+			while (true) {
 				innerSize = 1;
-				while (x < len) {
+				while (true) {
 					switch (data[x]) {
 						case '"':
 							while (data[++x] != '"') { }
 							break;
 						case '[':
-							if (debth++ == 0) {
-								y = ++x;
-								continue;
-							}
-							break;
 						case '{':
 							debth++;
 							break;
@@ -555,6 +551,9 @@ namespace NanoJson {
 
 				ProcessJsonObject:
 				this.InnerValues[index++] = new NanoJson(reference[y..x], false, innerSize, x - y);
+				if (index == this.InnerCount) {
+					return;
+				}
 				y = ++x;
 			}
 		}
@@ -568,12 +567,12 @@ namespace NanoJson {
 			ReadOnlySpan<char> data = reference.Span;
 
 			int x = 0;
-			int y = len - 1;
+			int y = 0;
 			int debth = 0;
 			int index = 0;
 			int innerSize;
 
-			while (x < len) {
+			while (true) {
 				if (data[x] != '"') {
 					x++;
 					continue;
@@ -592,7 +591,7 @@ namespace NanoJson {
 				while (char.IsWhiteSpace(data[++x])) { }
 				y = x;
 				innerSize = 1;
-				while (x < len) {
+				while (true) {
 					switch (data[x]) {
 						case '"':
 							while (data[++x] != '"') { }
@@ -621,6 +620,9 @@ namespace NanoJson {
 
 				ProcessJsonObject:
 				this.InnerValues[index++] = new NanoJson(name, reference[y..x], false, innerSize, x - y);
+				if (index == this.InnerCount) {
+					return;
+				}
 			}
 		}
 
@@ -1082,5 +1084,35 @@ namespace NanoJson {
 		}
 
 		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
+
+		public override bool Equals(object obj) => base.Equals((NanoJson)obj);
+		public bool Equals(NanoJson other) {
+			if (this.Type.Equals(other.Type)
+				&& this.InnerCount.Equals(other.InnerCount)
+				&& this.CompareKey(other.KeyData.Span)
+				&& MemoryExtensions.Equals(this.ReferenceData, other.ReferenceData)) {
+				return true;
+			}
+			return false;
+		}
+		public static bool operator ==(NanoJson left, NanoJson right) {
+			return left.Equals(right);
+		}
+
+		public static bool operator !=(NanoJson left, NanoJson right) {
+			return !(left == right);
+		}
+
+		public override int GetHashCode() {
+			unchecked {
+				int hash = (int)2166136261;
+				hash = (hash * 16777619) ^ this.Type.GetHashCode();
+				hash = (hash * 16777619) ^ this.InnerValues.GetHashCode();
+				hash = (hash * 16777619) ^ this.ReferenceData.GetHashCode();
+				hash = (hash * 16777619) ^ this.KeyData.GetHashCode();
+				hash = (hash * 16777619) ^ this.InnerCount.GetHashCode();
+				return hash;
+			}
+		}
 	}
 }
