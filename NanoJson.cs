@@ -90,8 +90,6 @@ namespace NanoJson {
 
 							ProcessJsonObject:
 							if (!name.IsEmpty) {
-								string n = name.ToString();
-								string v = owner.Value[y..x].ToString();
 								this.current = new nJson(name, owner.Value[y..x]);
 								return true;
 							}
