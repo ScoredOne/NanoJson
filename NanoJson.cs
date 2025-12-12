@@ -30,7 +30,7 @@ namespace NanoJson {
 			internal Enumerator(nJson owner) {
 				this.owner = owner;
 				this.index = -1;
-				this.current = owner;
+				this.current = nJson.Empty;
 
 				this.len = owner.Value.Length;
 				this.x = 0;
@@ -41,108 +41,134 @@ namespace NanoJson {
 
 			public readonly nJson Current => this.current;
 
+			public bool TryGetIndex(int index, out nJson value) {
+				if (index < 0) {
+					throw new ArgumentOutOfRangeException(nameof(index));
+				}
+				if (index == this.index) {
+					value = this.current;
+					return true;
+				}
+				if (this.index > index) {
+					this.Reset();
+				}
+				bool found = true;
+				while (this.index < index) {
+					found = this.MoveNext();
+				}
+				if (found) {
+					value = this.current;
+					return found;
+				}
+				else {
+					value = nJson.Empty;
+					return found;
+				}
+			}
+
 			public bool MoveNext() {
-				switch (owner.Type) {
+				switch (this.owner.Type) {
 					case JsonType.Object:
-						if (x == len) {
+						if (this.x == this.len) {
 							return false;
 						}
 						ReadOnlySpan<char> name;
 						while (true) {
-							while (owner.Value[x] != '"') { x++; }
-							if (owner.Value[++x] == '"') {
+							while (this.owner.Value[this.x] != '"') { this.x++; }
+							if (this.owner.Value[++this.x] == '"') {
 								name = ReadOnlySpan<char>.Empty;
 							}
 							else {
-								y = x;
-								while (owner.Value[++x] != '"') { }
-								name = owner.Value[y..x];
+								this.y = this.x;
+								while (this.owner.Value[++this.x] != '"') { }
+								name = this.owner.Value[this.y..this.x];
+								this.index++;
 							}
 
-							while (owner.Value[++x] != ':') { }
-							while (char.IsWhiteSpace(owner.Value[++x])) { }
-							y = x;
-							while (x < len) {
-								switch (owner.Value[x]) {
+							while (this.owner.Value[++this.x] != ':') { }
+							while (char.IsWhiteSpace(this.owner.Value[++this.x])) { }
+							this.y = this.x;
+							while (this.x < this.len) {
+								switch (this.owner.Value[this.x]) {
 									case '"':
-										while (owner.Value[++x] != '"') { }
+										while (this.owner.Value[++this.x] != '"') { }
 										break;
 									case '{':
 									case '[':
-										debth++;
+										this.debth++;
 										break;
 									case ']':
-										debth--;
+										this.debth--;
 										break;
 									case '}':
-										if (--debth < 0) { // no comma found, process last segment
+										if (--this.debth < 0) { // no comma found, process last segment
 											goto ProcessJsonObject;
 										}
 										break;
 									case ',':
-										if (debth == 0) {
+										if (this.debth == 0) {
 											goto ProcessJsonObject;
 										}
 										break;
 								}
-								x++;
+								this.x++;
 							}
 
 							ProcessJsonObject:
 							if (!name.IsEmpty) {
-								this.current = new nJson(name, owner.Value[y..x]);
+								this.current = new nJson(name, this.owner.Value[this.y..this.x]);
 								return true;
 							}
-							else if (x == len) {
+							else if (this.x == this.len) {
 								return false;
 							}
 						}
 					case JsonType.Array:
 						this.index++;
-						if (y == -1) {
-							while (owner.Value[x++] != '[') { }
+						if (this.y == -1) {
+							while (this.owner.Value[this.x++] != '[') { }
 						}
-						y = x;
-						debth = 1;
+						this.y = this.x;
+						this.debth = 1;
 
 						while (true) {
 							while (true) {
-								switch (owner.Value[x]) {
+								switch (this.owner.Value[this.x]) {
 									case '"':
-										while (owner.Value[++x] != '"') { }
+										while (this.owner.Value[++this.x] != '"') { }
 										break;
 									case '[':
 									case '{':
-										debth++;
+										this.debth++;
 										break;
 									case '}':
-										debth--;
+										this.debth--;
 										break;
 									case ']':
-										if (--debth == 0) {
+										if (--this.debth == 0) {
 											goto ProcessJsonObject;
 										}
 										break;
 									case ',':
-										if (debth == 1) {
+										if (this.debth == 1) {
 											goto ProcessJsonObject;
 										}
 										break;
 								}
-								x++;
+								this.x++;
 							}
 
 							ProcessJsonObject:
-							if (arrayPos == index) {
-								this.current = new nJson(owner.Value[y..x]);
+							if (this.arrayPos == this.index) {
+								this.current = new nJson(this.owner.Value[this.y..this.x]);
 								return true;
 							}
 							else {
-								y = ++x;
-								if (x == len) {
+								this.y = ++this.x;
+								if (this.x == this.len) {
 									return false;
 								}
-								arrayPos++;
+								this.arrayPos++;
 							}
 						}
 					default:
@@ -163,12 +189,21 @@ namespace NanoJson {
 			}
 		}
 
+		public static nJson Empty => new nJson(true);
+
 		public readonly JsonType Type;
 		public readonly ReadOnlySpan<char> Key;
 		public readonly ReadOnlySpan<char> Value;
 		public readonly bool IsEmpty;
 
-		public readonly bool IsNothing => Key == ReadOnlySpan<char>.Empty && Value == ReadOnlySpan<char>.Empty;
+		public readonly bool IsNothing => this.Key == ReadOnlySpan<char>.Empty && this.Value == ReadOnlySpan<char>.Empty;
+
+		private nJson(bool _) {
+			this.Type = JsonType.Null;
+			this.Key = ReadOnlySpan<char>.Empty;
+			this.Value = ReadOnlySpan<char>.Empty;
+			this.IsEmpty = true;
+		}
 
 		public nJson(string key, string value) : this(key.AsSpan(), value.AsSpan()) { }
 		public nJson(Span<char> key, Span<char> value) : this((ReadOnlySpan<char>)key, (ReadOnlySpan<char>)value) { }
@@ -451,13 +486,92 @@ namespace NanoJson {
 								}
 							}
 							else if (x == len) {
-								throw new IndexOutOfRangeException();
+								throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
 							}
 						}
-
-						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
 					default:
 						throw new InvalidOperationException();
+				}
+			}
+		}
+
+		public bool TryGetKey(ReadOnlySpan<char> key, out nJson value) {
+			if (this.Type != JsonType.Object) {
+				value = nJson.Empty;
+				return false;
+			}
+			int pathLen = key.Length;
+			int nameLen = -1;
+
+			int x = 0;
+			int len = this.Value.Length;
+			int y = 0;
+			int debth = 0;
+
+			bool found = false;
+
+			while (true) {
+				while (this.Value[x] != '"') { x++; }
+				ReadOnlySpan<char> name;
+				if (this.Value[++x] == '"') {
+					name = ReadOnlySpan<char>.Empty;
+				}
+				else {
+					y = x;
+					while (this.Value[++x] != '"') { }
+					name = this.Value[y..x];
+				}
+
+				if (key.StartsWith(name)) {
+					nameLen = name.Length;
+					found = true;
+				}
+
+				while (this.Value[++x] != ':') { }
+				while (char.IsWhiteSpace(this.Value[++x])) { }
+				y = x;
+				while (true) {
+					switch (this.Value[x]) {
+						case '"':
+							while (this.Value[++x] != '"') { }
+							break;
+						case '{':
+						case '[':
+							debth++;
+							break;
+						case ']':
+							debth--;
+							break;
+						case '}':
+							if (--debth < 0) { // no comma found, process last segment
+								goto ProcessJsonObject;
+							}
+							break;
+						case ',':
+							if (debth == 0) {
+								goto ProcessJsonObject;
+							}
+							break;
+					}
+					x++;
+				}
+
+				ProcessJsonObject:
+				if (found) {
+					if (nameLen == pathLen) {
+						value = new nJson(this.Value[y..x]);
+						return true;
+					}
+					else {
+						if (new nJson(this.Value[y..x]).TryGetKey(key[++nameLen..], out value)) {
+							return true;
+						}
+						return false;
+					}
+				}
+				else if (x == len) {
+					value = nJson.Empty;
+					return false;
 				}
 			}
 		}
@@ -525,20 +639,71 @@ namespace NanoJson {
 		public string GetString => this.Value.ToString();
 
 		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public string TryGetString(ReadOnlySpan<char> key) => this.TryGetKey(key, out nJson value) ? value.GetString : string.Empty;
+		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetString(ReadOnlySpan<char> key, out string @out) {
+			if (this.TryGetKey(key, out nJson value)) {
+				@out = value.GetString;
+				return true;
+			}
+			else {
+				@out = string.Empty;
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly double GetNumber => double.Parse(this.Value);
 
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public double TryGetNumber(ReadOnlySpan<char> key) => this.TryGetKey(key, out nJson value) ? value.GetNumber : double.NaN;
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
+			if (this.TryGetKey(key, out nJson value)) {
+				@out = value.GetNumber;
+				return true;
+			}
+			else {
+				@out = double.NaN;
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Get the bool value of This object
+		/// </summary>
+		public readonly bool GetBool => bool.Parse(this.Value);
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out nJson value) ? (@out = value.GetBool) : (@out = false);
 
 		/// <summary>
 		/// Get if This object is Null
 		/// </summary>
 		public readonly bool IsNull => this.Type == JsonType.Null;
 
-		/// <summary>
-		/// Get the bool value of This object
-		/// </summary>
-		public readonly bool GetBool => bool.Parse(this.Value);
 	}
 
 	public enum JsonType {
@@ -583,7 +748,7 @@ namespace NanoJson {
 
 			public ref NanoJson this[int index]
 			{
-				get => ref Data[index];
+				get => ref this.Data[index];
 			}
 		}
 
@@ -596,13 +761,13 @@ namespace NanoJson {
 				this.index = -1;
 			}
 
-			public readonly NanoJson Current => owner.InnerValues[this.index];
+			public readonly NanoJson Current => this.owner.InnerValues[this.index];
 
 			public bool MoveNext() {
-				switch (owner.Type) {
+				switch (this.owner.Type) {
 					case JsonType.Object:
 					case JsonType.Array:
-						if (++this.index < owner.InnerCount) {
+						if (++this.index < this.owner.InnerCount) {
 							return true;
 						}
 						return false;
@@ -643,7 +808,8 @@ namespace NanoJson {
 			if (data.Key == ReadOnlySpan<char>.Empty) {
 				if (data.IsNull) {
 					return NanoJson.Empty;
-				} else {
+				}
+				else {
 					return NanoJson.ParseJson(data.Value.ToString());
 				}
 			}
@@ -1037,7 +1203,7 @@ namespace NanoJson {
 			{
 				switch (this.Type) {
 					case JsonType.Object:
-						if (this.ContainsKey(key, out NanoJson found)) {
+						if (this.TryGetKey(key, out NanoJson found)) {
 							return found;
 						}
 						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
@@ -1499,6 +1665,28 @@ namespace NanoJson {
 		public string GetString => this.ReferenceData.ToString();
 
 		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public string TryGetString(ReadOnlySpan<char> key) => this.TryGetKey(key, out NanoJson value) ? value.GetString : string.Empty;
+		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetString(ReadOnlySpan<char> key, out string @out) {
+			if (this.TryGetKey(key, out NanoJson value)) {
+				@out = value.GetString;
+				return true;
+			}
+			else {
+				@out = string.Empty;
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Get the data used inside This object
 		/// </summary>
 		public readonly ReadOnlySpan<char> GetSpan => this.ReferenceData.Span;
@@ -1507,6 +1695,28 @@ namespace NanoJson {
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly double GetNumber => double.Parse(this.ReferenceData.Span);
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public double TryGetNumber(ReadOnlySpan<char> key) => this.TryGetKey(key, out NanoJson value) ? value.GetNumber : double.NaN;
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
+			if (this.TryGetKey(key, out NanoJson value)) {
+				@out = value.GetNumber;
+				return true;
+			}
+			else {
+				@out = double.NaN;
+				return false;
+			}
+		}
 
 
 		/// <summary>
@@ -1531,6 +1741,13 @@ namespace NanoJson {
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.Parse(this.ReferenceData.Span);
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out NanoJson value) ? (@out = value.GetBool) : (@out = false);
 
 		/// <summary>
 		/// Get the key of This object
@@ -1576,7 +1793,7 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public readonly bool CompareKey(ReadOnlySpan<char> key) {
-			return MemoryExtensions.SequenceEqual(key, KeyData.Span);
+			return MemoryExtensions.SequenceEqual(key, this.KeyData.Span);
 		}
 
 		/// <summary>
@@ -1584,27 +1801,29 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns>Key Found</returns>
-		public readonly bool ContainsKey(string key, out NanoJson found) => this.ContainsKey(key.AsSpan(), out found);
+		public readonly bool TryGetKey(string key, out NanoJson found) => this.TryGetKey(key.AsSpan(), out found);
 		/// <summary>
 		/// Searchs the values for matching Key. Keys including seperators (e.g 'object.value') will start searching inside of subsiquent objects to find desired Key.
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns>Key Found</returns>
-		public readonly bool ContainsKey(ReadOnlySpan<char> key, out NanoJson found) {
-			int pathLen = key.Length;
-			for (int x = 0; x < this.InnerCount; x++) {
-				NanoJson value = this.InnerValues[x];
-				ReadOnlySpan<char> valueKey = value.KeyData.Span;
-				int len = valueKey.Length;
-				if (pathLen == len) {
-					if (key.StartsWith(valueKey)) {
-						found = value;
-						return true;
+		public readonly bool TryGetKey(ReadOnlySpan<char> key, out NanoJson found) {
+			if (this.Type == JsonType.Object) {
+				int pathLen = key.Length;
+				for (int x = 0; x < this.InnerCount; x++) {
+					NanoJson value = this.InnerValues[x];
+					ReadOnlySpan<char> valueKey = value.KeyData.Span;
+					int len = valueKey.Length;
+					if (pathLen == len) {
+						if (key.StartsWith(valueKey)) {
+							found = value;
+							return true;
+						}
 					}
-				}
-				else if (pathLen > len) {
-					if (key.StartsWith(valueKey) && value.ContainsKey(key[++len..], out found)) {
-						return true;
+					else if (pathLen > len) {
+						if (key.StartsWith(valueKey) && value.TryGetKey(key[++len..], out found)) {
+							return true;
+						}
 					}
 				}
 			}
