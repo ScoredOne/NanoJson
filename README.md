@@ -47,7 +47,7 @@ Job=.NET 9.0  Runtime=.NET 9.0 <br>
 | LightJson      | ParseToSingleValue | 339,216.17 ns | 5,939.660 ns | 5,555.962 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson | ParseToSingleValue | 463,301.21 ns | 4,649.561 ns | 4,121.714 ns | 36.6211 | 24.4141 |       - |  616064 B |
 
-*nJson doesnt parse on data insersion, just parse is the speed for the class to be ready without parsing, ParseToString takes the received data and Decodes it with not structure read or parsing. <br><br>
+*nJson doesnt parse on data insersion, JustParse is the speed for the class to be ready without parsing, ParseToString takes the received data and Decodes it without structure read or parsing. <br><br>
 
 Test format:<br>
 JustParse			= Create object of library and parse json file into it. No output requested from object.<br>
