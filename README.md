@@ -23,13 +23,13 @@ Job=.NET 9.0  Runtime=.NET 9.0 <br>
 
 | Method         | format             | Mean          | Error        | StdDev       | Gen0    | Gen1    | Gen2    | Allocated |
 |--------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
-| nJson          | JustParse          |      34.96 ns |     0.253 ns |     0.237 ns |       - |       - |       - |         - |
+| nJson*         | JustParse          |      34.96 ns |     0.253 ns |     0.237 ns |       - |       - |       - |         - |
 | NanoJson       | JustParse          | 257,401.51 ns | 4,798.503 ns | 4,488.523 ns |  4.3945 |  0.9766 |       - |   74928 B |
 | SystemTextJson | JustParse          | 135,840.36 ns | 1,407.106 ns | 1,316.208 ns |  5.6152 |  0.4883 |       - |   95720 B |
 | LightJson      | JustParse          | 332,915.28 ns | 6,645.715 ns | 6,216.406 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson | JustParse          | 490,189.47 ns | 8,933.286 ns | 8,356.202 ns | 36.1328 | 23.4375 |       - |  616064 B |
 |                |                    |               |              |              |         |         |         |           |
-| nJson          | ParseToString      | 116,087.74 ns | 2,220.724 ns | 2,077.266 ns | 35.6445 | 35.6445 | 35.6445 |  114204 B |
+| nJson*         | ParseToString      | 116,087.74 ns | 2,220.724 ns | 2,077.266 ns | 35.6445 | 35.6445 | 35.6445 |  114204 B |
 | NanoJson       | ParseToString      | 448,532.13 ns | 6,183.289 ns | 5,481.324 ns | 30.2734 | 30.2734 | 30.2734 |  171146 B |
 | SystemTextJson | ParseToString      | 252,498.30 ns | 2,280.401 ns | 2,021.516 ns | 27.3438 | 27.3438 | 27.3438 |  183732 B |
 | LightJson      | ParseToString      | 495,948.28 ns | 7,350.923 ns | 6,516.402 ns | 42.4805 | 20.9961 |       - |  714936 B |
