@@ -1,14 +1,16 @@
-﻿///////////////////////////////////////////////////
-///												///
-///		NanoJson by Duncan 'ScoredOne' Mellor	///
-///												///
-///		Released under the MIT license			///
-///												///
-///		Thursday 27th November 2025				///
-///												///
-///		Software provided in as-is condition	///
-///												///
-///////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////
+///													///
+///		NanoJson by Duncan 'ScoredOne' Mellor		///
+///													///
+///		Released under the MIT license				///
+///													///
+///		Thursday 27th November 2025					///
+///													///
+///		Software provided in as-is condition		///
+///													///
+///		Git: https://github.com/ScoredOne/NanoJson	///
+///													///
+///////////////////////////////////////////////////////
 
 using System;
 using System.Buffers;
@@ -267,13 +269,13 @@ namespace NanoJson {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
 					while (char.IsWhiteSpace(this.Value[++x])) { }
-					if (x == len) {
+					if (x == len++) {
 						this.Value = this.Value[first..len];
 						this.IsEmpty = true;
 						return;
 					}
 
-					this.Value = this.Value[first..++len];
+					this.Value = this.Value[first..len];
 					this.IsEmpty = false;
 					return;
 				}
@@ -292,8 +294,8 @@ namespace NanoJson {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
 					while (char.IsWhiteSpace(this.Value[++x])) { }
-					if (x == len) {
-						this.Value = this.Value[first..++len];
+					if (x == len++) {
+						this.Value = this.Value[first..len];
 						this.IsEmpty = true;
 						return;
 					}
@@ -381,7 +383,6 @@ namespace NanoJson {
 
 					bool dec = false;
 					bool E = false;
-
 					int len = this.Value.Length;
 					while (++x < len) {
 						c = this.Value[x];
@@ -636,22 +637,84 @@ namespace NanoJson {
 
 		public readonly Enumerator GetEnumerator() => new Enumerator(this);
 
-		public string GetString => this.Value.ToString();
+		/// <summary>
+		/// Get the string value as-is in relation to this object
+		/// </summary>
+		public string GetStringLiteral => this.Value.ToString();
+
+		/// <summary>
+		/// Get the decoded string value of the object
+		/// </summary>
+		public string GetStringDecoded
+		{
+			get
+			{
+				char c;
+				int len = this.Value.Length;
+				char[] buffer = ArrayPool<char>.Shared.Rent(len);
+				int x = 0;
+				int y = 0;
+				while (x < len) {
+					c = this.Value[x];
+					switch (c) {
+						case '\\':
+							c = this.Value[++x];
+							switch (c) {
+								case '\\':
+								case '/':
+								case '"':
+									buffer[y++] = c;
+									break;
+								case 'f':
+									buffer[y++] = '\f';
+									break;
+								case 'b':
+									buffer[y++] = '\b';
+									break;
+								case 'n':
+									buffer[y++] = '\n';
+									break;
+								case 'r':
+									buffer[y++] = '\r';
+									break;
+								case 't':
+									buffer[y++] = '\t';
+									break;
+								case 'u': {
+									buffer[y++] = (char)((NanoJson.ReadHexNumber(this.Value[++x]) * 4096)
+										+ (NanoJson.ReadHexNumber(this.Value[++x]) * 256)
+										+ (NanoJson.ReadHexNumber(this.Value[++x]) * 16)
+										+ NanoJson.ReadHexNumber(this.Value[++x]));
+									break;
+								}
+							}
+							break;
+						default:
+							buffer[y++] = c;
+							break;
+					}
+					x++;
+				}
+				string decodedValue = buffer.AsSpan()[..y].ToString();
+				ArrayPool<char>.Shared.Return(buffer);
+				return decodedValue;
+			}
+		}
 
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public string TryGetString(ReadOnlySpan<char> key) => this.TryGetKey(key, out nJson value) ? value.GetString : string.Empty;
+		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out nJson value) ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public bool TryGetString(ReadOnlySpan<char> key, out string @out) {
+		public bool TryGetString(ReadOnlySpan<char> key, out string @out, bool decoded = true) {
 			if (this.TryGetKey(key, out nJson value)) {
-				@out = value.GetString;
+				@out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
 				return true;
 			}
 			else {
@@ -1354,31 +1417,38 @@ namespace NanoJson {
 			}
 		}
 
-		public readonly override string ToString() => this.ToString(false);
+		[Flags]
+		public enum ToStringFormat : byte {
+			Pretty = 0x1,
+			Decoded = 0x2,
+		}
 
-		public readonly string ToString(bool pretty) {
+		public readonly override string ToString() => this.ToString(ToStringFormat.Pretty | ToStringFormat.Decoded);
+
+		public readonly string ToString(in ToStringFormat format) {
 			int count = 0;
-			this.CalculateStringSize(pretty, ref count);
+			bool pretty = format.HasFlag(ToStringFormat.Pretty);
+			bool decoded = format.HasFlag(ToStringFormat.Decoded);
+			this.CalculateStringSize(in pretty, in decoded, ref count);
 
 			char[] buffer = ArrayPool<char>.Shared.Rent(count);
-			Memory<char> bufferMemory = buffer.AsMemory()[..count];
-			this.ProcessString(false, pretty, in bufferMemory);
+			this.ProcessString(false, in pretty, in decoded, in buffer);
 
-			string builtString = new string(bufferMemory.Span);
+			string builtString = new string(buffer.AsSpan()[..count]);
 			ArrayPool<char>.Shared.Return(buffer);
 			return builtString;
 		}
 
-		private readonly void CalculateStringSize(bool pretty, ref int count) {
+		private readonly void CalculateStringSize(in bool pretty, in bool decoded, ref int count) {
 			int indent = 0;
-			this.CalculateStringSize(false, pretty, ref count, ref indent);
+			this.CalculateStringSize(false, in pretty, in decoded, ref count, ref indent);
 		}
 
-		private readonly void CalculateStringSize(bool AsValue, bool pretty, ref int count, ref int indent) {
+		private readonly void CalculateStringSize(bool AsValue, in bool pretty, in bool decoded, ref int count, ref int indent) {
 			NanoJson value;
 			switch (this.Type) {
 				case JsonType.String:
-					count += this.ReferenceData.Length + 2;
+					count += (decoded ? this.GetStringDecodeLength() : this.ReferenceData.Length) + 2;
 					break;
 				case JsonType.Null:
 				case JsonType.Number:
@@ -1404,7 +1474,7 @@ namespace NanoJson {
 						for (int x = 0; x < this.InnerCount; x++) {
 							value = this.InnerValues[x];
 							count += value.KeyData.Length;
-							value.CalculateStringSize(true, pretty, ref count, ref indent);
+							value.CalculateStringSize(true, in pretty, in decoded, ref count, ref indent);
 						}
 					}
 					else {
@@ -1412,7 +1482,7 @@ namespace NanoJson {
 						for (int x = 0; x < this.InnerCount; x++) {
 							value = this.InnerValues[x];
 							count += value.KeyData.Length;
-							value.CalculateStringSize(true, pretty, ref count, ref indent);
+							value.CalculateStringSize(true, in pretty, in decoded, ref count, ref indent);
 						}
 					}
 
@@ -1448,14 +1518,14 @@ namespace NanoJson {
 										count += indent * INDENT_LEN;
 										break;
 								}
-								value.CalculateStringSize(false, pretty, ref count, ref indent);
+								value.CalculateStringSize(false, in pretty, in decoded, ref count, ref indent);
 							}
 						}
 						else {
-							count += (this.InnerCount * 2) - 1;
+							count += this.InnerCount - 1;
 							for (int x = 0; x < this.InnerCount; x++) {
 								value = this.InnerValues[x];
-								value.CalculateStringSize(false, pretty, ref count, ref indent);
+								value.CalculateStringSize(false, in pretty, in decoded, ref count, ref indent);
 							}
 						}
 						indent--;
@@ -1474,10 +1544,10 @@ namespace NanoJson {
 		/// <param name="AsValue"></param>
 		/// <param name="pretty"></param>
 		/// <param name="sb"></param>
-		private readonly void ProcessString(bool AsValue, bool pretty, in Memory<char> sb) {
+		private readonly void ProcessString(bool AsValue, in bool pretty, in bool decoded, in char[] sb) {
 			int indent = 0;
 			int pos = 0;
-			this.ProcessString(AsValue, pretty, ref indent, in sb, ref pos);
+			this.ProcessString(AsValue, in pretty, in decoded, ref indent, in sb, ref pos);
 		}
 		/// <summary>
 		/// Recursive method to build the json ToString output
@@ -1486,127 +1556,168 @@ namespace NanoJson {
 		/// <param name="pretty"></param>
 		/// <param name="indent"></param>
 		/// <param name="sb"></param>
-		private readonly void ProcessString(bool AsValue, bool pretty, ref int indent, in Memory<char> sb, ref int sbPos) {
-			Span<char> data = sb.Span;
+		private readonly void ProcessString(bool AsValue, in bool pretty, in bool decoded, ref int indent, in char[] sb, ref int sbPos) {
 			switch (this.Type) {
 				case JsonType.String: {
-					ReadOnlySpan<char> refStringSpan = this.ReferenceData.Span;
-					data[sbPos++] = '"';
-					refStringSpan.CopyTo(data[sbPos..(sbPos += refStringSpan.Length)]);
-					data[sbPos++] = '"';
+					sb[sbPos++] = '"';
+					if (decoded) {
+						char[] buffer = ArrayPool<char>.Shared.Rent(this.ReferenceData.Length);
+						this.RentStringDecodedIntoBuffer(in buffer, out int len);
+						for (int x = 0; x < len; x++) {
+							sb[sbPos++] = buffer[x];
+						}
+						ArrayPool<char>.Shared.Return(buffer);
+					}
+					else {
+						ReadOnlySpan<char> refSpan = this.ReferenceData.Span;
+						int redLen = refSpan.Length;
+						for (int x = 0; x < redLen; x++) {
+							sb[sbPos++] = refSpan[x];
+						}
+					}
+					sb[sbPos++] = '"';
 					break;
 				}
 				case JsonType.Null:
 				case JsonType.Number:
 				case JsonType.Boolean: {
 					ReadOnlySpan<char> refSpan = this.ReferenceData.Span;
-					refSpan.CopyTo(data[sbPos..(sbPos += refSpan.Length)]);
+					for (int x = 0; x < this.ReferenceData.Length; x++) {
+						sb[sbPos++] = refSpan[x];
+					}
 					break;
 				}
 				case JsonType.Object: {
 					ReadOnlySpan<char> indentSpan = pretty ? INDENT_TABS.AsSpan() : ReadOnlySpan<char>.Empty;
 					if (pretty && !AsValue) {
 						for (int x = 0; x < indent; x++) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int y = 0; y < INDENT_LEN; y++) {
+								sb[sbPos++] = indentSpan[y];
+							}
 						}
 					}
-					data[sbPos++] = '{';
+					sb[sbPos++] = '{';
 
 					if (this.InnerCount == 0) {
 						if (pretty) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int y = 0; y < INDENT_LEN; y++) {
+								sb[sbPos++] = indentSpan[y];
+							}
 						}
-						data[sbPos++] = '}';
+						sb[sbPos++] = '}';
 						break;
 					}
 					indent++;
 					int limit = this.InnerCount - 1;
 					ReadOnlySpan<char> keySpan;
 					NanoJson value;
+					int keyLen;
 					if (pretty) {
-						data[sbPos++] = '\n';
+						sb[sbPos++] = '\n';
 						int x = 0;
 						for (; x < limit; x++) {
 							value = this.InnerValues[x];
 							for (int y = 0; y < indent; y++) {
-								indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+								for (int z = 0; z < INDENT_LEN; z++) {
+									sb[sbPos++] = indentSpan[z];
+								}
 							}
-							data[sbPos++] = '"';
+							sb[sbPos++] = '"';
 							keySpan = value.KeyData.Span;
-							keySpan.CopyTo(data[sbPos..(sbPos += keySpan.Length)]);
-							data[sbPos++] = '"';
-							data[sbPos++] = ':';
-							data[sbPos++] = ' ';
-							value.ProcessString(true, pretty, ref indent, in sb, ref sbPos);
-							data[sbPos++] = ',';
-							data[sbPos++] = '\n';
+							keyLen = keySpan.Length;
+							for (int y = 0; y < keyLen; y++) {
+								sb[sbPos++] = keySpan[y];
+							}
+							sb[sbPos++] = '"';
+							sb[sbPos++] = ':';
+							sb[sbPos++] = ' ';
+							value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							sb[sbPos++] = ',';
+							sb[sbPos++] = '\n';
 						}
 						value = this.InnerValues[x];
 						for (int y = 0; y < indent; y++) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int z = 0; z < INDENT_LEN; z++) {
+								sb[sbPos++] = indentSpan[z];
+							}
 						}
-						data[sbPos++] = '"';
+						sb[sbPos++] = '"';
 						keySpan = value.KeyData.Span;
-						keySpan.CopyTo(data[sbPos..(sbPos += keySpan.Length)]);
-						data[sbPos++] = '"';
-						data[sbPos++] = ':';
-						data[sbPos++] = ' ';
-						value.ProcessString(true, pretty, ref indent, in sb, ref sbPos);
-						data[sbPos++] = '\n';
+						keyLen = keySpan.Length;
+						for (int y = 0; y < keyLen; y++) {
+							sb[sbPos++] = keySpan[y];
+						}
+						sb[sbPos++] = '"';
+						sb[sbPos++] = ':';
+						sb[sbPos++] = ' ';
+						value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+						sb[sbPos++] = '\n';
 					}
 					else {
 						int x = 0;
 						for (; x < limit; x++) {
 							value = this.InnerValues[x];
-							data[sbPos++] = '"';
+							sb[sbPos++] = '"';
 							keySpan = value.KeyData.Span;
-							keySpan.CopyTo(data[sbPos..(sbPos += keySpan.Length)]);
-							data[sbPos++] = '"';
-							data[sbPos++] = ':';
-							data[sbPos++] = ' ';
-							value.ProcessString(true, pretty, ref indent, in sb, ref sbPos);
-							data[sbPos++] = ',';
+							keyLen = keySpan.Length;
+							for (int y = 0; y < keyLen; y++) {
+								sb[sbPos++] = keySpan[y];
+							}
+							sb[sbPos++] = '"';
+							sb[sbPos++] = ':';
+							sb[sbPos++] = ' ';
+							value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							sb[sbPos++] = ',';
 						}
 						value = this.InnerValues[x];
-						data[sbPos++] = '"';
+						sb[sbPos++] = '"';
 						keySpan = value.KeyData.Span;
-						keySpan.CopyTo(data[sbPos..(sbPos += keySpan.Length)]);
-						data[sbPos++] = '"';
-						data[sbPos++] = ':';
-						data[sbPos++] = ' ';
-						value.ProcessString(true, pretty, ref indent, in sb, ref sbPos);
+						keyLen = keySpan.Length;
+						for (int y = 0; y < keyLen; y++) {
+							sb[sbPos++] = keySpan[y];
+						}
+						sb[sbPos++] = '"';
+						sb[sbPos++] = ':';
+						sb[sbPos++] = ' ';
+						value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
 					}
 
 					indent--;
 					if (pretty) {
 						for (int x = 0; x < indent; x++) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int y = 0; y < INDENT_LEN; y++) {
+								sb[sbPos++] = indentSpan[y];
+							}
 						}
 					}
-					data[sbPos++] = '}';
+					sb[sbPos++] = '}';
 					break;
 				}
 				case JsonType.Array: {
 					ReadOnlySpan<char> indentSpan = pretty ? INDENT_TABS.AsSpan() : ReadOnlySpan<char>.Empty;
 					if (pretty && !AsValue) {
 						for (int x = 0; x < indent; x++) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int y = 0; y < INDENT_LEN; y++) {
+								sb[sbPos++] = indentSpan[y];
+							}
 						}
 					}
-					data[sbPos++] = '[';
+					sb[sbPos++] = '[';
 
 					if (this.InnerCount == 0) {
 						if (pretty) {
-							indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+							for (int y = 0; y < INDENT_LEN; y++) {
+								sb[sbPos++] = indentSpan[y];
+							}
 						}
-						data[sbPos++] = ']';
+						sb[sbPos++] = ']';
 					}
 					else {
 						indent++;
 						int limit = this.InnerCount - 1;
 						NanoJson value;
 						if (pretty) {
-							data[sbPos++] = '\n';
+							sb[sbPos++] = '\n';
 							int x = 0;
 							for (; x < limit; x++) {
 								value = this.InnerValues[x];
@@ -1616,13 +1727,15 @@ namespace NanoJson {
 									case JsonType.Number:
 									case JsonType.Boolean:
 										for (int y = 0; y < indent; y++) {
-											indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+											for (int z = 0; z < INDENT_LEN; z++) {
+												sb[sbPos++] = indentSpan[z];
+											}
 										}
 										break;
 								}
-								value.ProcessString(false, pretty, ref indent, in sb, ref sbPos);
-								data[sbPos++] = ',';
-								data[sbPos++] = '\n';
+								value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+								sb[sbPos++] = ',';
+								sb[sbPos++] = '\n';
 							}
 							value = this.InnerValues[x];
 							switch (value.Type) {
@@ -1631,53 +1744,219 @@ namespace NanoJson {
 								case JsonType.Number:
 								case JsonType.Boolean:
 									for (int y = 0; y < indent; y++) {
-										indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+										for (int z = 0; z < INDENT_LEN; z++) {
+											sb[sbPos++] = indentSpan[z];
+										}
 									}
 									break;
 							}
-							value.ProcessString(false, pretty, ref indent, in sb, ref sbPos);
-							data[sbPos++] = '\n';
+							value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							sb[sbPos++] = '\n';
 						}
 						else {
 							int x = 0;
 							for (; x < limit; x++) {
 								value = this.InnerValues[x];
-								value.ProcessString(false, pretty, ref indent, in sb, ref sbPos);
-								data[sbPos++] = ',';
+								value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+								sb[sbPos++] = ',';
 							}
 							value = this.InnerValues[x];
-							value.ProcessString(false, pretty, ref indent, in sb, ref sbPos);
+							value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
 						}
 
 						indent--;
 						if (pretty) {
 							for (int x = 0; x < indent; x++) {
-								indentSpan.CopyTo(data[sbPos..(sbPos += INDENT_LEN)]);
+								for (int y = 0; y < INDENT_LEN; y++) {
+									sb[sbPos++] = indentSpan[y];
+								}
 							}
 						}
-						data[sbPos++] = ']';
+						sb[sbPos++] = ']';
 					}
 					break;
 				}
 			}
 		}
 
-		public string GetString => this.ReferenceData.ToString();
+		/// <summary>
+		/// Get the literal string value of the object
+		/// </summary>
+		public string GetStringLiteral => this.ReferenceData.ToString();
+
+		/// <param name="buffer">Designed to take in an array provided by ArrayBuffer</param> 
+		private void RentStringDecodedIntoBuffer(in char[] buffer, out int newLen) {
+			int x = 0;
+			int len = this.ReferenceData.Length;
+			newLen = 0;
+			ReadOnlySpan<char> data = this.ReferenceData.Span;
+			char c;
+			while (x < len) {
+				c = data[x];
+				switch (c) {
+					case '\\':
+						c = data[++x];
+						switch (c) {
+							case '\\':
+							case '/':
+							case '"':
+								buffer[newLen++] = c;
+								break;
+							case 'f':
+								buffer[newLen++] = '\f';
+								break;
+							case 'b':
+								buffer[newLen++] = '\b';
+								break;
+							case 'n':
+								buffer[newLen++] = '\n';
+								break;
+							case 'r':
+								buffer[newLen++] = '\r';
+								break;
+							case 't':
+								buffer[newLen++] = '\t';
+								break;
+							case 'u': {
+								buffer[newLen++] = (char)((ReadHexNumber(data[++x]) * 4096)
+										+ (ReadHexNumber(data[++x]) * 256)
+										+ (ReadHexNumber(data[++x]) * 16)
+										+ ReadHexNumber(data[++x]));
+								break;
+							}
+						}
+						break;
+					default:
+						buffer[newLen++] = c;
+						break;
+				}
+				x++;
+			}
+		}
+
+		private int GetStringDecodeLength() {
+			int count = 0;
+			int x = 0;
+			int len = this.ReferenceData.Length;
+			ReadOnlySpan<char> data = this.ReferenceData.Span;
+			char c;
+			while (x < len) {
+				c = data[x];
+				switch (c) {
+					case '\\':
+						c = data[++x];
+						if (c == 'u') {
+							x += 4;
+						}
+						count++;
+						break;
+					default:
+						count++;
+						break;
+				}
+				x++;
+			}
+			return count;
+		}
+
+		/// <summary>
+		/// Get the decoded string value of the object
+		/// </summary>
+		public string GetStringDecoded
+		{
+			get
+			{
+				int x = 0;
+				int len = this.ReferenceData.Length;
+				ReadOnlySpan<char> data = this.ReferenceData.Span;
+				char c;
+
+				char[] buffer = ArrayPool<char>.Shared.Rent(len);
+				x = 0;
+				int y = 0;
+				while (x < len) {
+					c = data[x];
+					switch (c) {
+						case '\\':
+							c = data[++x];
+							switch (c) {
+								case '\\':
+								case '/':
+								case '"':
+									buffer[y++] = c;
+									break;
+								case 'f':
+									buffer[y++] = '\f';
+									break;
+								case 'b':
+									buffer[y++] = '\b';
+									break;
+								case 'n':
+									buffer[y++] = '\n';
+									break;
+								case 'r':
+									buffer[y++] = '\r';
+									break;
+								case 't':
+									buffer[y++] = '\t';
+									break;
+								case 'u': {
+									buffer[y++] = (char)((ReadHexNumber(data[++x]) * 4096)
+										+ (ReadHexNumber(data[++x]) * 256)
+										+ (ReadHexNumber(data[++x]) * 16)
+										+ (ReadHexNumber(data[++x])));
+									break;
+								}
+							}
+							break;
+						default:
+							buffer[y++] = c;
+							break;
+					}
+					x++;
+				}
+				string decodedValue = buffer.AsSpan()[..y].ToString();
+				ArrayPool<char>.Shared.Return(buffer);
+				return decodedValue;
+			}
+		}
+
+		public static int ReadHexNumber(char character) {
+			return character switch {
+				'0' => 0,
+				'1' => 1,
+				'2' => 2,
+				'3' => 3,
+				'4' => 4,
+				'5' => 5,
+				'6' => 6,
+				'7' => 7,
+				'8' => 8,
+				'9' => 9,
+				'A' => 10,
+				'B' => 11,
+				'C' => 12,
+				'D' => 13,
+				'E' => 14,
+				'F' => 15,
+				_ => throw new InvalidOperationException($"{nameof(character)} '{character}' is not a hex number")
+			};
+		}
 
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public string TryGetString(ReadOnlySpan<char> key) => this.TryGetKey(key, out NanoJson value) ? value.GetString : string.Empty;
+		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out NanoJson value) ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public bool TryGetString(ReadOnlySpan<char> key, out string @out) {
+		public bool TryGetString(ReadOnlySpan<char> key, out string @out, bool decoded = true) {
 			if (this.TryGetKey(key, out NanoJson value)) {
-				@out = value.GetString;
+				@out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
 				return true;
 			}
 			else {
@@ -1854,6 +2133,18 @@ namespace NanoJson {
 
 		public readonly override int GetHashCode() {
 			return HashCode.Combine(this.Type, this.InnerValues, this.ReferenceData, this.KeyData, this.InnerCount);
+		}
+
+		public static implicit operator NanoJson(nJson span) {
+			return NanoJson.Pin(span);
+		}
+		public static implicit operator nJson(NanoJson self) {
+			if (self.KeyData.IsEmpty) {
+				return new nJson(self.ReferenceData.Span);
+			}
+			else {
+				return new nJson(self.KeyData.Span, self.ReferenceData.Span);
+			}
 		}
 	}
 }
