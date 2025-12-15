@@ -880,16 +880,32 @@ namespace NanoJson {
 		public const string NULL = "null";
 
 		public static NanoJson ParseJson(string key, string data) {
-			if (string.IsNullOrWhiteSpace(key)) {
+			return NanoJson.ParseJson(key.AsMemory(), data.AsMemory());
+		}
+
+		public static NanoJson ParseJson(ReadOnlyMemory<char> key, string data) {
+			return NanoJson.ParseJson(key, data.AsMemory());
+		}
+
+		public static NanoJson ParseJson(string key, ReadOnlyMemory<char> data) {
+			return NanoJson.ParseJson(key.AsMemory(), data);
+		}
+
+		public static NanoJson ParseJson(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
+			if (key.IsEmpty) {
 				return NanoJson.ParseJson(data);
 			}
 			else {
-				return new NanoJson(key.AsMemory(), data.AsMemory(), false, -1);
+				return new NanoJson(key, data, false, -1);
 			}
 		}
 
 		public static NanoJson ParseJson(string data) {
-			return new NanoJson(data.AsMemory(), false, -1);
+			return NanoJson.ParseJson(data.AsMemory());
+		}
+
+		public static NanoJson ParseJson(ReadOnlyMemory<char> data) {
+			return new NanoJson(data, false, -1);
 		}
 
 		public static NanoJson Pin(nJson data) { // Needs testing
@@ -911,11 +927,19 @@ namespace NanoJson {
 			return new NanoJson(key, JsonType.Array, data);
 		}
 
+		public static NanoJson CreateArray(ReadOnlyMemory<char> key, NanoJson[] data) {
+			return new NanoJson(key, JsonType.Array, data);
+		}
+
 		public static NanoJson CreateArray(NanoJson[] data) {
 			return new NanoJson(JsonType.Array, data);
 		}
 
 		public static NanoJson CreateObject(string key, NanoJson[] data) {
+			return new NanoJson(key, JsonType.Object, data);
+		}
+
+		public static NanoJson CreateObject(ReadOnlyMemory<char> key, NanoJson[] data) {
 			return new NanoJson(key, JsonType.Object, data);
 		}
 
@@ -927,11 +951,23 @@ namespace NanoJson {
 			return new NanoJson(key.AsMemory(), data.AsMemory(), true, -1);
 		}
 
-		public static NanoJson CreateStringObject(string data) {
-			return new NanoJson(data.AsMemory(), false, -1);
+		public static NanoJson CreateStringObject(string key, ReadOnlyMemory<char> data) {
+			return NanoJson.CreateStringObject(key.AsMemory(), data);
+		}
+
+		public static NanoJson CreateStringObject(ReadOnlyMemory<char> key, string data) {
+			return NanoJson.CreateStringObject(key, data.AsMemory());
+		}
+
+		public static NanoJson CreateStringObject(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
+			return new NanoJson(key, data, true, -1);
 		}
 
 		public static NanoJson ContainValueInObject(string key, NanoJson data) {
+			return new NanoJson(key, data);
+		}
+
+		public static NanoJson ContainValueInObject(ReadOnlyMemory<char> key, NanoJson data) {
 			return new NanoJson(key, data);
 		}
 
@@ -939,12 +975,19 @@ namespace NanoJson {
 			return new NanoJson(key, data);
 		}
 
+		public static NanoJson CreateBoolObject(ReadOnlyMemory<char> key, bool data) {
+			return new NanoJson(key, data);
+		}
+
 		public static NanoJson CreateNumberObject(string key, double data) {
 			return new NanoJson(key, data);
 		}
 
-		private readonly static NanoJson empty = new NanoJson();
-		public static NanoJson Empty => empty;
+		public static NanoJson CreateNumberObject(ReadOnlyMemory<char> key, double data) {
+			return new NanoJson(key, data);
+		}
+
+		public readonly static NanoJson Empty = new NanoJson();
 
 		public readonly JsonType Type;
 		private readonly NanoArray InnerValues;

@@ -64,8 +64,40 @@ Object and Array types both accessible via foreach, IEnumerator not supported, u
 Object type can also be accessed via key search. Furthermore, you can include a seperator (for example 'object.value') in your string and it will aquire the internal value.<br>
 <br>
 
+### Creating NanoJson Types
+```CS
+public static NanoJson ParseJson(string key, string data); // Translate string data into NanoJson
+public static NanoJson ParseJson(string data);
+
+public static NanoJson CreateArray(string key, NanoJson[] data); // Add Existing values to a Array
+public static NanoJson CreateArray(NanoJson[] data);
+
+public static NanoJson CreateObject(string key, NanoJson[] data); // Add Existing values to a Object
+public static NanoJson CreateObject(NanoJson[] data);
+
+public static NanoJson CreateStringObject(string key, string data);
+
+public static NanoJson CreateBoolObject(string key, bool data);
+
+public static NanoJson CreateNumberObject(string key, double data);
+
+public static NanoJson ContainValueInObject(string key, NanoJson data); // To create a new NanoJson value with a new name
+```
+Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.
+<br>
+
 ## nJson
 The absolute smallest, parse on demand Json<br>
 ref struct for methods quick access json data and extract what you need.<br>
 Index support not included, intended for direct access for specific variables<br>
 Foreach support included just like NanoJson, however speed is a bit slower than NanoJson due to parse on demand nature<br>
+<br>
+
+### Creating nJson Types
+```CS
+private void Function(string jsonData) {
+    nJson js = new nJson(jsonData);
+}
+```
+With on demand parsing, the reference target goes in and it will use it later.
+<br>
