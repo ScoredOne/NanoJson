@@ -10,7 +10,7 @@ jobs:
       contents: read
       id-token: write  # enable GitHub OIDC token issuance for this job
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
