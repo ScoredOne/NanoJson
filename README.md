@@ -1,25 +1,26 @@
 # NanoJson
 
-<br>NetStandard 2.1<br>
+[![NuGet package](https://img.shields.io/nuget/v/Nerdbank.GitVersioning.svg)](https://www.nuget.org/packages/NanoJson)
 
-<br>Small and simple Json Parser to minimise memory allocation of Json.<br>
-Theory;<br>
+NetStandard 2.1
+
+Small and simple Json Parser to minimise memory allocation of Json.
+
+
+Theory;
 - String goes in
 - Get Memory of String
 - Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
 
-<br>Nuget coming soon <br>
+// * Summary *
 
- <br>
-// * Summary * <br>
- <br>
-BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6691/22H2/2022Update) <br>
-AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores <br>
-.NET SDK 9.0.307 <br>
-  [Host]   : .NET 6.0.36 (6.0.3624.51421), X64 RyuJIT AVX2 [AttachedDebugger] <br>
+BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6691/22H2/2022Update)  
+AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores  
+.NET SDK 9.0.307  
+  [Host]   : .NET 6.0.36 (6.0.3624.51421), X64 RyuJIT AVX2 [AttachedDebugger]  
   .NET 9.0 : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2 <br>
 
-Job=.NET 9.0  Runtime=.NET 9.0 <br>
+Job=.NET 9.0  Runtime=.NET 9.0
 
 | Method         | format             | Mean          | Error        | StdDev       | Gen0    | Gen1    | Gen2    | Allocated |
 |--------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
@@ -47,22 +48,20 @@ Job=.NET 9.0  Runtime=.NET 9.0 <br>
 | LightJson      | ParseToSingleValue | 339,216.17 ns | 5,939.660 ns | 5,555.962 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson | ParseToSingleValue | 463,301.21 ns | 4,649.561 ns | 4,121.714 ns | 36.6211 | 24.4141 |       - |  616064 B |
 
-*nJson doesnt parse on data insersion, JustParse is the speed for the class to be ready without parsing, ParseToString takes the received data and Decodes it without structure read or parsing. <br><br>
+*nJson doesnt parse on data insersion, JustParse is the speed for the class to be ready without parsing, ParseToString takes the received data and Decodes it without structure read or parsing.  
 
-Test format:<br>
-JustParse			= Create object of library and parse json file into it. No output requested from object.<br>
-ParseToString		= Create object of library and parse json file into it. Take created object and request string of object.<br>
-ParseReformat		= Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.<br>
-ParseToSingleValue	= Create object of library and parse json file into it. Receives index and string path and aquires a single value <br>
-<br>
+Test format:  
+JustParse			= Create object of library and parse json file into it. No output requested from object.  
+ParseToString		= Create object of library and parse json file into it. Take created object and request string of object.  
+ParseReformat		= Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.  
+ParseToSingleValue	= Create object of library and parse json file into it. Receives index and string path and aquires a single value.  
 
 ## NanoJson
-Minimal allocation without compromise on time.<br>
-Access constructors via static NanoJson.ParseJson ext.<br>
-Object and Array types both accessible via indexer, dictionary is not implemented.<br>
-Object and Array types both accessible via foreach, IEnumerator not supported, uses custom Enumerator<br>
-Object type can also be accessed via key search. Furthermore, you can include a seperator (for example 'object.value') in your string and it will aquire the internal value.<br>
-<br>
+Minimal allocation without compromise on time.  
+Access constructors via static NanoJson.ParseJson ext.  
+Object and Array types both accessible via indexer, dictionary is not implemented.  
+Object and Array types both accessible via foreach, IEnumerator not supported, uses custom Enumerator.  
+Object type can also be accessed via key search. Furthermore, you can include a seperator (for example 'object.value') in your string and it will aquire the internal value.  
 
 ### Creating NanoJson Types
 ```CS
@@ -83,15 +82,13 @@ public static NanoJson CreateNumberObject(string key, double data);
 
 public static NanoJson ContainValueInObject(string key, NanoJson data); // To create a new NanoJson value with a new name
 ```
-Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.
-<br>
+Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
 
 ## nJson
-The absolute smallest, parse on demand Json<br>
-ref struct for methods quick access json data and extract what you need.<br>
-Index support not included, intended for direct access for specific variables<br>
-Foreach support included just like NanoJson, however speed is a bit slower than NanoJson due to parse on demand nature<br>
-<br>
+The absolute smallest, parse on demand Json.  
+ref struct for methods quick access json data and extract what you need.  
+Index support not included, intended for direct access for specific variables.  
+Foreach support included just like NanoJson, however speed is a bit slower than NanoJson due to parse on demand nature.  
 
 ### Creating nJson Types
 ```CS
@@ -99,5 +96,4 @@ private void Function(string jsonData) {
     nJson js = new nJson(jsonData);
 }
 ```
-With on demand parsing, the reference target goes in and it will use it later.
-<br>
+With on demand parsing, the reference target goes in and it will use it later.  
