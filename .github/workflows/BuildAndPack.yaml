@@ -39,56 +39,48 @@ jobs:
           user: ScoredOne
 
       - name: Check & delete existing NuGet version
-        shell: pwsh
+        shell: bash
         run: |
-          $packageId = "NanoJson"
-          $version = $env:VERSION
-          if (-not $version) {
-            Write-Error "VERSION not set"
+          packageId="NanoJson"
+          version="${VERSION}"
+          if [ -z "$version" ]; then
+            echo "VERSION not set"
             exit 1
-          }
+          fi
 
-          $lower = $packageId.ToLower()
-          # Flat container URL returns 200 if the specific version exists
-          $checkUrl = "https://api.nuget.org/v3-flatcontainer/$lower/$version/$lower.nuspec"
-          Write-Host "Checking $checkUrl"
-          $exists = $false
-          try {
-            # Use HEAD to just check existence
-            $resp = Invoke-WebRequest -Uri $checkUrl -Method Head -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-            $exists = $true
-          } catch {
-            $exists = $false
-          }
+          lower=$(echo "$packageId" | tr '[:upper:]' '[:lower:]')
+          checkUrl="https://api.nuget.org/v3-flatcontainer/${lower}/${version}/${lower}.nuspec"
+          echo "Checking $checkUrl"
 
-          if ($exists) {
-            Write-Host "Version $version of $packageId exists on nuget.org — attempting delete (requires delete permission in API key)."
-            # API key from NuGet/login step:
-            $apiKey = "${{ steps.login.outputs.NUGET_API_KEY }}"
-            if (-not $apiKey) {
-              Write-Error "No NUGET API key available from login step."
+          if curl -sfI "$checkUrl" >/dev/null 2>&1; then
+            echo "Version $version of $packageId exists on nuget.org — attempting delete (requires delete permission in API key)."
+            apiKey="${{ steps.login.outputs.NUGET_API_KEY }}"
+            if [ -z "$apiKey" ]; then
+              echo "No NUGET API key available from login step."
               exit 1
-            }
+            fi
 
             # Attempt delete. This will fail if the API key doesn't have delete permission or nuget.org disallows deletion.
-            dotnet nuget delete $packageId $version `
-              --api-key $apiKey `
-              --source https://api.nuget.org/v3/index.json `
+            dotnet nuget delete "$packageId" "$version" \
+              --api-key "$apiKey" \
+              --source https://api.nuget.org/v3/index.json \
               --non-interactive
 
-            Write-Host "Delete command finished. Check the previous output for success/failure."
-          } else {
-            Write-Host "Version $version of $packageId NOT found on nuget.org — continuing to push."
-          }
+            echo "Delete command finished. Check the previous output for success/failure."
+          else
+            echo "Version $version of $packageId NOT found on nuget.org — continuing to push."
+          fi
 
       - name: push to NuGet
-        shell: pwsh
+        shell: bash
         run: |
-          $pkg = Get-ChildItem -Path ./artifacts -Filter "NanoJson.${{ env.VERSION }}*.nupkg" | Select-Object -First 1
-          if (-not $pkg) { 
-            Write-Error "Package not found: ./artifacts/NanoJson.${{ env.VERSION }}.nupkg"
+          pkg=$(ls ./artifacts/NanoJson.${VERSION}*.nupkg 2>/dev/null | head -n 1 || true)
+          if [ -z "$pkg" ]; then
+            echo "Package not found: ./artifacts/NanoJson.${VERSION}.nupkg"
             exit 1
-          }
-          dotnet nuget push $pkg.FullName `
+          fi
+          dotnet nuget push "$pkg" \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json
             --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
             --source https://api.nuget.org/v3/index.json
