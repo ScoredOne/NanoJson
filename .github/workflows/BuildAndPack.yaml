@@ -1,9 +1,8 @@
 name: BuildAndPack
 on:
   push:
-    branches: [master]
-    tags: ['*']
-  pull_request:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   build-and-publish:
@@ -33,9 +32,8 @@ jobs:
       - name: Set VERSION variable from tag
         run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
 
-
       - name: Echo Env
-        run: echo $GITHUB_ENV
+        run: echo ${VERSION}
 #  steps.Test.outputs.nuget-exists
 
       - name: push to NuGet
