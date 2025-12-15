@@ -38,39 +38,6 @@ jobs:
         with:
           user: ScoredOne
 
-      - name: Check & delete existing NuGet version
-        shell: bash
-        run: |
-          packageId="NanoJson"
-          version="${VERSION}"
-          if [ -z "$version" ]; then
-            echo "VERSION not set"
-            exit 1
-          fi
-
-          lower=$(echo "$packageId" | tr '[:upper:]' '[:lower:]')
-          checkUrl="https://api.nuget.org/v3-flatcontainer/${lower}/${version}/${lower}.nuspec"
-          echo "Checking $checkUrl"
-
-          if curl -sfI "$checkUrl" >/dev/null 2>&1; then
-            echo "Version $version of $packageId exists on nuget.org — attempting delete (requires delete permission in API key)."
-            apiKey="${{ steps.login.outputs.NUGET_API_KEY }}"
-            if [ -z "$apiKey" ]; then
-              echo "No NUGET API key available from login step."
-              exit 1
-            fi
-
-            # Attempt delete. This will fail if the API key doesn't have delete permission or nuget.org disallows deletion.
-            dotnet nuget delete "$packageId" "$version" \
-              --api-key "$apiKey" \
-              --source https://api.nuget.org/v3/index.json \
-              --non-interactive
-
-            echo "Delete command finished. Check the previous output for success/failure."
-          else
-            echo "Version $version of $packageId NOT found on nuget.org — continuing to push."
-          fi
-
       - name: push to NuGet
         shell: bash
         run: |
