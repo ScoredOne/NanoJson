@@ -97,3 +97,69 @@ private void Function(string jsonData) {
 }
 ```
 With on demand parsing, the reference target goes in and it will use it later.  
+
+## Value Access  
+
+### Foreach  
+
+Both NanoJson and nJson support foreach iteration with a custom Enumerator, ref struct based for no allocation looping.  
+Both Array and Objects can be looped or indexed to aquire its inner values. As a dictionary isnt used, larger scoped Objects will be slower to access than traditional hash code methods but on small scale objects the speed is negligable.    
+```CS
+private void Foreach(string jsonData) {
+    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
+    nJson nJ = new nJson(jsonData);
+    foreach (NanoJson nano in NanoJ) {
+        ...
+    }
+    foreach (nJson n in nJ) {
+        ...
+    }
+}
+```  
+
+### Key Index 
+
+Both NanoJson and nJson support key searching and key path searching for Json Objects (e.g Object -> Object -> Object -> Value).  
+
+```CS
+private void Key(string jsonData) {
+    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
+    nJson nJ = new nJson(jsonData);
+
+    NanoJson NanoJValue1 = NanoJ["name"];
+    NanoJson NanoJValue2 = NanoJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
+    NanoJson NanoJValue3 = NanoJ["name.name"][2]["value"]; // The same as NanoJ["name"]["name"][2]["value"]
+
+    nJson nJValue1 = nJ["name"];
+    nJson nJValue2 = nJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
+}
+``` 
+
+### Numeric Index  
+
+NanoJson as it uses arrays allows indexing support. Index support is NOT available for nJson due to the inability to store the index value.  
+
+```CS
+private void Index(string jsonData) {
+    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
+    NanoJson NJ = Nanoj[0];
+
+    nJson nJ = new nJson(jsonData);
+    nJson nJIndex = nJ[0]; // NOPE
+}
+```  
+
+For similar functionality with nJson, the Enumerator has been expanded and included a TryGetIndex method.  
+
+```CS
+private void Index(string jsonData) {
+    nJson nJ = new nJson(jsonData);
+    nJson.Enumerator nJ_Enum = nJ.GetEnumerator();
+    if (nJ_Enum.TryGetIndex(2, out nJson nJ2)) {
+        ...
+    }
+    // From here, nJ_Enum is at index 2, going backwards calls Reset() internally, going forward continues where it left off at 2
+}
+```  
+
+No arrays are used in nJson so compromises must be made and the indexer was one of them.

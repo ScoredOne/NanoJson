@@ -1,16 +1,18 @@
-﻿///////////////////////////////////////////////////////
-///													///
-///		NanoJson by Duncan 'ScoredOne' Mellor		///
-///													///
-///		Released under the MIT license				///
-///													///
-///		Thursday 27th November 2025					///
-///													///
-///		Software provided in as-is condition		///
-///													///
-///		Git: https://github.com/ScoredOne/NanoJson	///
-///													///
-///////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////
+///															///
+///		NanoJson by Duncan 'ScoredOne' Mellor				///
+///															///
+///		Released under the MIT license						///
+///															///
+///		Thursday 27th November 2025							///
+///															///
+///		Software provided in as-is condition				///
+///															///
+///		Git: https://github.com/ScoredOne/NanoJson			///
+///															///
+///		Nuget: https://www.nuget.org/packages/NanoJson		///
+///															///
+///////////////////////////////////////////////////////////////
 
 using System;
 using System.Buffers;

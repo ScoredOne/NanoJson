@@ -1,24 +1,32 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+  
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <PropertyGroup>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
-  
-  <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\"/>
-  </ItemGroup>
-  
-  <PropertyGroup>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
-  </PropertyGroup>
+    <Description>
+      Small and simple Json Parser to minimise memory allocation of Json.
+      Theory:
+      - String goes in
+      - Get Memory of String
+      - Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
 
+      Provides access to classes NanoJson and nJson;
+      NanoJson is a parse on insertion, readonly struct based memory plotter allocating only the array space required and the string data that needs to exist.
+      nJson is a ref struct for Json access in methods, it is a parse on demand format using spans to read data, no array allocations only returning deeper nJson bodies.
+
+      Enumerators are included for Foreach looping however no support for IEnumerator.
+      Support of object in object path index. For example 'value["object.value"]' is the equivalent of 'this["object"]["value"]'.
+    </Description>
+    <Authors>ScoredOne</Authors>
+    <PackageTags>Json</PackageTags>
+    <RepositoryUrl>https://github.com/ScoredOne/NanoJson</RepositoryUrl>
+  </PropertyGroup>
+  
   <ItemGroup>
-    <None Include="LICENSE.txt" Pack="true" PackagePath="\"/>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="LICENSE.txt" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
