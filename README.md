@@ -137,7 +137,7 @@ private void Key(string jsonData) {
 
 ### Numeric Index  
 
-NanoJson as it uses arrays allows indexing support. Index support is NOT available for nJson due to the inability to store the index value.  
+NanoJson as it uses arrays allows indexing support, this means index support is available for both Json Objects and Arrays.
 
 ```CS
 private void Index(string jsonData) {
@@ -145,10 +145,12 @@ private void Index(string jsonData) {
     NanoJson NJ = Nanoj[0];
 
     nJson nJ = new nJson(jsonData);
-    nJson nJIndex = nJ[0]; // NOPE
+    nJson nJIndex = nJ[0];
 }
 ```  
 
+nJson has index support however it should only be used to access a single value from the data, otherwise using the Enumerator is recommended.
+The Enumerator stores the index and read position while directly asking for the index in a nJson object will not be rememebered and will need to start the search from scratch.
 For similar functionality with nJson, the Enumerator has been expanded and included a TryGetIndex method.  
 
 ```CS

@@ -57,9 +57,12 @@ namespace NanoJson {
 				if (this.index > index) {
 					this.Reset();
 				}
-				bool found = true;
-				while (this.index < index) {
-					found = this.MoveNext();
+				bool found = false;
+				while (this.MoveNext()) {
+					if (this.index == index) {
+						found = true;
+						break;
+					}
 				}
 				if (found) {
 					value = this.current;
@@ -74,12 +77,24 @@ namespace NanoJson {
 			public bool MoveNext() {
 				switch (this.owner.Type) {
 					case JsonType.Object:
-						if (this.x == this.len) {
+						if (this.owner.IsEmpty) {
 							return false;
 						}
+						while (++this.y < this.len) {
+							switch (this.owner.Value[this.y]) {
+								case '"':
+									goto go;
+								case '}':
+									return false;
+							}
+						}
+						if (this.y == this.len) {
+							return false;
+						}
+						go:
+						this.x = this.y;
 						ReadOnlySpan<char> name;
 						while (true) {
-							while (this.owner.Value[this.x] != '"') { this.x++; }
 							if (this.owner.Value[++this.x] == '"') {
 								name = ReadOnlySpan<char>.Empty;
 							}
@@ -87,13 +102,13 @@ namespace NanoJson {
 								this.y = this.x;
 								while (this.owner.Value[++this.x] != '"') { }
 								name = this.owner.Value[this.y..this.x];
-								this.index++;
 							}
 
 							while (this.owner.Value[++this.x] != ':') { }
 							while (char.IsWhiteSpace(this.owner.Value[++this.x])) { }
 							this.y = this.x;
-							while (this.x < this.len) {
+							this.index++;
+							while (true) {
 								switch (this.owner.Value[this.x]) {
 									case '"':
 										while (this.owner.Value[++this.x] != '"') { }
@@ -122,13 +137,17 @@ namespace NanoJson {
 							ProcessJsonObject:
 							if (!name.IsEmpty) {
 								this.current = new nJson(name, this.owner.Value[this.y..this.x]);
+								this.y = this.x;
 								return true;
 							}
-							else if (this.x == this.len) {
+							else if (++this.x == this.len) {
 								return false;
 							}
 						}
 					case JsonType.Array:
+						if (this.owner.IsEmpty) {
+							return false;
+						}
 						this.index++;
 						if (this.y == -1) {
 							while (this.owner.Value[this.x++] != '[') { }
@@ -169,10 +188,10 @@ namespace NanoJson {
 								return true;
 							}
 							else {
-								this.y = ++this.x;
-								if (this.x == this.len) {
+								if (++this.x == this.len) {
 									return false;
 								}
+								this.y = this.x;
 								this.arrayPos++;
 							}
 						}
@@ -422,6 +441,9 @@ namespace NanoJson {
 		{
 			get
 			{
+				if (this.IsEmpty) {
+					throw new IndexOutOfRangeException("Body is Empty");
+				}
 				switch (this.Type) {
 					case JsonType.Object:
 						int pathLen = key.Length;
@@ -584,8 +606,68 @@ namespace NanoJson {
 		{
 			get
 			{
+				if (this.IsEmpty) {
+					throw new IndexOutOfRangeException("Body is Empty");
+				}
 				switch (this.Type) {
-					case JsonType.Array:
+					case JsonType.Object: {
+						int len = this.Value.Length;
+						int x = 0;
+						int y = 0;
+						int debth = 0;
+						int currentIndex = -1;
+						ReadOnlySpan<char> name;
+						while (true) {
+							while (this.Value[x] != '"') { x++; }
+							if (this.Value[++x] == '"') {
+								name = ReadOnlySpan<char>.Empty;
+							}
+							else {
+								y = x;
+								while (this.Value[++x] != '"') { }
+								name = this.Value[y..x];
+							}
+
+							while (this.Value[++x] != ':') { }
+							while (char.IsWhiteSpace(this.Value[++x])) { }
+							y = x;
+							currentIndex++;
+							while (true) {
+								switch (this.Value[x]) {
+									case '"':
+										while (this.Value[++x] != '"') { }
+										break;
+									case '{':
+									case '[':
+										debth++;
+										break;
+									case ']':
+										debth--;
+										break;
+									case '}':
+										if (--debth < 0) { // no comma found, process last segment
+											goto ProcessJsonObject;
+										}
+										break;
+									case ',':
+										if (debth == 0) {
+											goto ProcessJsonObject;
+										}
+										break;
+								}
+								x++;
+							}
+
+							ProcessJsonObject:
+							if (currentIndex == index) {
+								return new nJson(name, this.Value[y..x]);
+							}
+							else if (++x == len) {
+								throw new IndexOutOfRangeException();
+							}
+						}
+					}
+					case JsonType.Array: {
 						int x = 0;
 						int len = this.Value.Length;
 						while (this.Value[x++] != '[') { }
@@ -625,13 +707,14 @@ namespace NanoJson {
 								return new nJson(this.Value[y..x]);
 							}
 							else {
-								y = ++x;
-								if (x == len) {
+								if (++x == len) {
 									throw new IndexOutOfRangeException();
 								}
+								y = x;
 								arrayPos++;
 							}
 						}
+					}
 					default:
 						throw new IndexOutOfRangeException();
 				}
