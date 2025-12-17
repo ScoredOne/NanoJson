@@ -1,6 +1,6 @@
 # NanoJson
 
-[![NuGet package](https://img.shields.io/nuget/v/Nerdbank.GitVersioning.svg)](https://www.nuget.org/packages/NanoJson)
+[![NuGet package](https://img.shields.io/nuget/v/Nerdbank.GitVersioning.svg)](https://www.nuget.org/packages/NJson)
 
 NetStandard 2.1
 
@@ -25,25 +25,25 @@ Job=.NET 9.0  Runtime=.NET 9.0
 | Method         | format             | Mean          | Error        | StdDev       | Gen0    | Gen1    | Gen2    | Allocated |
 |--------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
 | nJson*         | JustParse          |      34.96 ns |     0.253 ns |     0.237 ns |       - |       - |       - |         - |
-| NanoJson       | JustParse          | 257,401.51 ns | 4,798.503 ns | 4,488.523 ns |  4.3945 |  0.9766 |       - |   74928 B |
+| NJson          | JustParse          | 257,401.51 ns | 4,798.503 ns | 4,488.523 ns |  4.3945 |  0.9766 |       - |   74928 B |
 | SystemTextJson | JustParse          | 135,840.36 ns | 1,407.106 ns | 1,316.208 ns |  5.6152 |  0.4883 |       - |   95720 B |
 | LightJson      | JustParse          | 332,915.28 ns | 6,645.715 ns | 6,216.406 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson | JustParse          | 490,189.47 ns | 8,933.286 ns | 8,356.202 ns | 36.1328 | 23.4375 |       - |  616064 B |
 |                |                    |               |              |              |         |         |         |           |
 | nJson*         | ParseToString      | 116,087.74 ns | 2,220.724 ns | 2,077.266 ns | 35.6445 | 35.6445 | 35.6445 |  114204 B |
-| NanoJson       | ParseToString      | 448,532.13 ns | 6,183.289 ns | 5,481.324 ns | 30.2734 | 30.2734 | 30.2734 |  171146 B |
+| NJson          | ParseToString      | 448,532.13 ns | 6,183.289 ns | 5,481.324 ns | 30.2734 | 30.2734 | 30.2734 |  171146 B |
 | SystemTextJson | ParseToString      | 252,498.30 ns | 2,280.401 ns | 2,021.516 ns | 27.3438 | 27.3438 | 27.3438 |  183732 B |
 | LightJson      | ParseToString      | 495,948.28 ns | 7,350.923 ns | 6,516.402 ns | 42.4805 | 20.9961 |       - |  714936 B |
 | NewtonsoftJson | ParseToString      | 631,081.54 ns | 7,874.481 ns | 6,980.522 ns | 54.6875 | 53.7109 | 27.3438 |  801977 B |
 |                |                    |               |              |              |         |         |         |           |
 | nJson          | ParseReformat      | 415,652.83 ns | 3,881.399 ns | 3,241.144 ns |  5.8594 |  0.4883 |       - |  105064 B |
-| NanoJson       | ParseReformat      | 362,175.70 ns | 2,553.769 ns | 2,388.797 ns | 10.7422 |       - |       - |  179992 B |
+| NJson          | ParseReformat      | 362,175.70 ns | 2,553.769 ns | 2,388.797 ns | 10.7422 |       - |       - |  179992 B |
 | SystemTextJson | ParseReformat      | 320,474.14 ns | 6,093.533 ns | 6,772.946 ns | 23.4375 |  9.7656 |       - |  415688 B |
 | LightJson      | ParseReformat      | 453,788.29 ns | 6,940.725 ns | 6,152.772 ns | 42.9688 | 18.0664 |       - |  725168 B |
 | NewtonsoftJson | ParseReformat      | 651,335.42 ns | 8,306.892 ns | 7,770.272 ns | 54.6875 | 41.0156 |       - |  928080 B |
 |                |                    |               |              |              |         |         |         |           |
 | nJson          | ParseToSingleValue |  34,791.47 ns |   265.735 ns |   248.568 ns |       - |       - |       - |      56 B |
-| NanoJson       | ParseToSingleValue | 254,382.96 ns | 3,170.271 ns | 2,810.363 ns |  4.3945 |  0.4883 |       - |   74984 B |
+| NJson          | ParseToSingleValue | 254,382.96 ns | 3,170.271 ns | 2,810.363 ns |  4.3945 |  0.4883 |       - |   74984 B |
 | SystemTextJson | ParseToSingleValue | 138,601.18 ns | 1,357.285 ns | 1,269.605 ns |  5.8594 |  0.9766 |       - |   99992 B |
 | LightJson      | ParseToSingleValue | 339,216.17 ns | 5,939.660 ns | 5,555.962 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson | ParseToSingleValue | 463,301.21 ns | 4,649.561 ns | 4,121.714 ns | 36.6211 | 24.4141 |       - |  616064 B |
@@ -56,31 +56,31 @@ ParseToString		= Create object of library and parse json file into it. Take crea
 ParseReformat		= Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.  
 ParseToSingleValue	= Create object of library and parse json file into it. Receives index and string path and aquires a single value.  
 
-## NanoJson
+## NJson
 Minimal allocation without compromise on time.  
-Access constructors via static NanoJson.ParseJson ext.  
+Access constructors via static NJson.ParseJson ext.  
 Object and Array types both accessible via indexer, dictionary is not implemented.  
 Object and Array types both accessible via foreach, IEnumerator not supported, uses custom Enumerator.  
 Object type can also be accessed via key search. Furthermore, you can include a seperator (for example 'object.value') in your string and it will aquire the internal value.  
 
-### Creating NanoJson Types
+### Creating NJson Types
 ```CS
-public static NanoJson ParseJson(string key, string data); // Translate string data into NanoJson
-public static NanoJson ParseJson(string data);
+public static NJson ParseJson(string key, string data); // Translate string data into NJson
+public static NJson ParseJson(string data);
 
-public static NanoJson CreateArray(string key, NanoJson[] data); // Add Existing values to a Array
-public static NanoJson CreateArray(NanoJson[] data);
+public static NJson CreateArray(string key, NJson[] data); // Add Existing values to a Array
+public static NJson CreateArray(NJson[] data);
 
-public static NanoJson CreateObject(string key, NanoJson[] data); // Add Existing values to a Object
-public static NanoJson CreateObject(NanoJson[] data);
+public static NJson CreateObject(string key, NJson[] data); // Add Existing values to a Object
+public static NJson CreateObject(NJson[] data);
 
-public static NanoJson CreateStringObject(string key, string data);
+public static NJson CreateStringObject(string key, string data);
 
-public static NanoJson CreateBoolObject(string key, bool data);
+public static NJson CreateBoolObject(string key, bool data);
 
-public static NanoJson CreateNumberObject(string key, double data);
+public static NJson CreateNumberObject(string key, double data);
 
-public static NanoJson ContainValueInObject(string key, NanoJson data); // To create a new NanoJson value with a new name
+public static NJson ContainValueInObject(string key, NJson data); // To create a new NJson value with a new name
 ```
 Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
 
@@ -88,7 +88,7 @@ Statics are provided to create the objects you want. Constructors are private to
 The absolute smallest, parse on demand Json.  
 ref struct for methods quick access json data and extract what you need.  
 Index support not included, intended for direct access for specific variables.  
-Foreach support included just like NanoJson, however speed is a bit slower than NanoJson due to parse on demand nature.  
+Foreach support included just like NJson, however speed is a bit slower than NJson due to parse on demand nature.  
 
 ### Creating nJson Types
 ```CS
@@ -102,13 +102,13 @@ With on demand parsing, the reference target goes in and it will use it later.
 
 ### Foreach  
 
-Both NanoJson and nJson support foreach iteration with a custom Enumerator, ref struct based for no allocation looping.  
+Both NJson and nJson support foreach iteration with a custom Enumerator, ref struct based for no allocation looping.  
 Both Array and Objects can be looped or indexed to aquire its inner values. As a dictionary isnt used, larger scoped Objects will be slower to access than traditional hash code methods but on small scale objects the speed is negligable.    
 ```CS
 private void Foreach(string jsonData) {
-    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
+    NJson NanoJ = NJson.ParseJson(jsonData);
     nJson nJ = new nJson(jsonData);
-    foreach (NanoJson nano in NanoJ) {
+    foreach (NJson nano in NanoJ) {
         ...
     }
     foreach (nJson n in nJ) {
@@ -119,16 +119,16 @@ private void Foreach(string jsonData) {
 
 ### Key Index 
 
-Both NanoJson and nJson support key searching and key path searching for Json Objects (e.g Object -> Object -> Object -> Value).  
+Both NJson and nJson support key searching and key path searching for Json Objects (e.g Object -> Object -> Object -> Value).  
 
 ```CS
 private void Key(string jsonData) {
-    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
+    NJson NanoJ = NJson.ParseJson(jsonData);
     nJson nJ = new nJson(jsonData);
 
-    NanoJson NanoJValue1 = NanoJ["name"];
-    NanoJson NanoJValue2 = NanoJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
-    NanoJson NanoJValue3 = NanoJ["name.name"][2]["value"]; // The same as NanoJ["name"]["name"][2]["value"]
+    NJson NanoJValue1 = NanoJ["name"];
+    NJson NanoJValue2 = NanoJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
+    NJson NanoJValue3 = NanoJ["name.name"][2]["value"]; // The same as NanoJ["name"]["name"][2]["value"]
 
     nJson nJValue1 = nJ["name"];
     nJson nJValue2 = nJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
@@ -137,12 +137,12 @@ private void Key(string jsonData) {
 
 ### Numeric Index  
 
-NanoJson as it uses arrays allows indexing support, this means index support is available for both Json Objects and Arrays.
+NJson as it uses arrays allows indexing support, this means index support is available for both Json Objects and Arrays.
 
 ```CS
 private void Index(string jsonData) {
-    NanoJson NanoJ = NanoJson.ParseJson(jsonData);
-    NanoJson NJ = Nanoj[0];
+    NJson NanoJ = NJson.ParseJson(jsonData);
+    NJson NJ = Nanoj[0];
 
     nJson nJ = new nJson(jsonData);
     nJson nJIndex = nJ[0];
