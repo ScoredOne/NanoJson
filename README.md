@@ -131,7 +131,8 @@ private void Key(string jsonData) {
     NanoJson NanoJValue3 = NanoJ["name.name"][2]["value"]; // The same as NanoJ["name"]["name"][2]["value"]
 
     nJson nJValue1 = nJ["name"];
-    nJson nJValue2 = nJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
+    nJson nJValue2 = nJ["name.name.value"]; // The same as nJ["name"]["name"]["value"]
+    nJson nJValue3 = nJ["name.name"][2]["value"]; // The same as nJ["name"]["name"][2]["value"]
 }
 ``` 
 
