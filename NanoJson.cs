@@ -2154,6 +2154,8 @@ namespace NanoJson {
 		/// </summary>
 		public ReadOnlySpan<NJson> GetInsideValues => this.InnerValues.GetSpan;
 
+		public int Length => this.InnerValues.Length;
+
 		/// <summary>
 		/// Get if This object is Null
 		/// </summary>
