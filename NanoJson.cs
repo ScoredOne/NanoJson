@@ -819,6 +819,19 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
+		public double TryGetNumber(string key) => this.TryGetNumber(key.AsSpan());
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber(string key, out double @out) => this.TryGetNumber(key.AsSpan(), out @out);
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public double TryGetNumber(ReadOnlySpan<char> key) => this.TryGetKey(key, out nJson value) ? value.GetNumber : double.NaN;
 		/// <summary>
 		/// Try to get the numerical value of the object at path
@@ -840,6 +853,13 @@ namespace NanoJson {
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.Parse(this.Value);
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -2094,6 +2114,19 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
+		public string TryGetString(string key, bool decoded = true) => this.TryGetString(key.AsSpan(), decoded);
+		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetString(string key, out string @out, bool decoded = true) => this.TryGetString(key.AsSpan(), out @out, decoded);
+
+		/// <summary>
+		/// Try to get the string value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out NJson value) ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
 		/// <summary>
 		/// Try to get the string value of the object at path
@@ -2120,6 +2153,19 @@ namespace NanoJson {
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly double GetNumber => double.Parse(this.ReferenceData.Span);
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public double TryGetNumber(string key) => this.TryGetNumber(key.AsSpan());
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber(string key, out double @out) => this.TryGetNumber(@key.AsSpan(), out @out);
 
 		/// <summary>
 		/// Try to get the numerical value of the object at path
@@ -2168,6 +2214,13 @@ namespace NanoJson {
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.Parse(this.ReferenceData.Span);
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -2259,6 +2312,15 @@ namespace NanoJson {
 			found = NJson.Empty;
 			return false;
 		}
+
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including seperators (e.g 'object.value') will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		public readonly NJson GetKeyOrEmpty(string key) => this.GetKeyOrEmpty(key.AsSpan());
+		/// <summary>
+		/// Searchs the values for matching Key. Keys including seperators (e.g 'object.value') will start searching inside of subsiquent objects to find desired Key.
+		/// </summary>
+		public readonly NJson GetKeyOrEmpty(ReadOnlySpan<char> key) => this.TryGetKey(key, out NJson found) ? found : NJson.Empty;
 
 		public readonly Enumerator GetEnumerator() => new Enumerator(this);
 
