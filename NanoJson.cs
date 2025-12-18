@@ -2490,17 +2490,17 @@ namespace NanoJson {
 
 			public static T GetEmpty<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
 				return (T)(object)(typeof(T).Name switch {
-					"SByte" => sbyte.Parse(stackalloc char[] { '0' }),
-					"Byte" => byte.Parse(stackalloc char[] { '0' }),
-					"Int16" => short.Parse(stackalloc char[] { '0' }),
-					"UInt16" => ushort.Parse(stackalloc char[] { '0' }),
-					"Int32" => int.Parse(stackalloc char[] { '0' }),
-					"UInt32" => uint.Parse(stackalloc char[] { '0' }),
-					"Int64" => long.Parse(stackalloc char[] { '0' }),
-					"UInt64" => ulong.Parse(stackalloc char[] { '0' }),
-					"Single" => float.Parse(stackalloc char[] { '0' }),
+					"SByte" => (sbyte)0,
+					"Byte" => (byte)0,
+					"Int16" => (short)0,
+					"UInt16" => (ushort)0,
+					"Int32" => 0,
+					"UInt32" => (uint)0,
+					"Int64" => (long)0,
+					"UInt64" => (ulong)0,
+					"Single" => 0.0f,
 					"Double" => 0.0d,
-					"Decimal" => decimal.Parse(stackalloc char[] { '0' }),
+					"Decimal" => (decimal)0,
 					_ => throw new NotSupportedException(typeof(T).Name),
 				});
 			}
