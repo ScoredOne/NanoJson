@@ -792,14 +792,14 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out nJson value) ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out nJson value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public bool TryGetString(ReadOnlySpan<char> key, out string @out, bool decoded = true) {
-			if (this.TryGetKey(key, out nJson value)) {
+			if (this.TryGetKey(key, out nJson value) && value.Type == JsonType.String) {
 				@out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
 				return true;
 			}
@@ -812,7 +812,7 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
-		public readonly double GetNumber => double.Parse(this.Value);
+		public readonly double GetNumber => double.TryParse(this.Value, out double value) ? value : double.NaN;
 
 		/// <summary>
 		/// Try to get the numerical value of the object at path
@@ -839,9 +839,8 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
-			if (this.TryGetKey(key, out nJson value)) {
-				@out = value.GetNumber;
-				return true;
+			if (this.TryGetKey(key, out nJson value) && value.Type == JsonType.Number) {
+				return double.TryParse(this.Value, out @out);
 			}
 			else {
 				@out = double.NaN;
@@ -852,7 +851,7 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the bool value of This object
 		/// </summary>
-		public readonly bool GetBool => bool.Parse(this.Value);
+		public readonly bool GetBool => bool.TryParse(this.Value, out bool value) && value;
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -866,7 +865,7 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out nJson value) ? (@out = value.GetBool) : (@out = false);
+		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out nJson value) ? (@out = value.Type == JsonType.Boolean && value.GetBool) : (@out = false);
 
 		/// <summary>
 		/// Get if This object is Null
@@ -2127,14 +2126,14 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out NJson value) ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+		public string TryGetString(ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out NJson value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
 		/// <summary>
 		/// Try to get the string value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public bool TryGetString(ReadOnlySpan<char> key, out string @out, bool decoded = true) {
-			if (this.TryGetKey(key, out NJson value)) {
+			if (this.TryGetKey(key, out NJson value) && value.Type == JsonType.String) {
 				@out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
 				return true;
 			}
@@ -2152,7 +2151,7 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
-		public readonly double GetNumber => double.Parse(this.ReferenceData.Span);
+		public readonly double GetNumber => double.TryParse(this.ReferenceData.Span, out double value) ? value : double.NaN;
 
 		/// <summary>
 		/// Try to get the numerical value of the object at path
@@ -2179,9 +2178,8 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
-			if (this.TryGetKey(key, out NJson value)) {
-				@out = value.GetNumber;
-				return true;
+			if (this.TryGetKey(key, out NJson value) && value.Type == JsonType.Number) {
+				return double.TryParse(this.ReferenceData.Span, out @out);
 			}
 			else {
 				@out = double.NaN;
@@ -2213,7 +2211,7 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the bool value of This object
 		/// </summary>
-		public readonly bool GetBool => bool.Parse(this.ReferenceData.Span);
+		public readonly bool GetBool => bool.TryParse(this.ReferenceData.Span, out bool value) && value;
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -2227,7 +2225,7 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out NJson value) ? (@out = value.GetBool) : (@out = false);
+		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out NJson value) ? (@out = value.Type == JsonType.Boolean && value.GetBool) : (@out = false);
 
 		/// <summary>
 		/// Get the key of This object
