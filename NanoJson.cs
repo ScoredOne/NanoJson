@@ -815,6 +815,13 @@ namespace NanoJson {
 		public readonly double GetNumber => double.TryParse(this.Value, out double value) ? value : double.NaN;
 
 		/// <summary>
+		/// Get the number contained inside This object
+		/// </summary>
+		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return double.TryParse(this.Value, out double value) ? NJson.Number.GetValue<T>(value) : NJson.Number.GetEmpty<T>();
+		}
+
+		/// <summary>
 		/// Try to get the numerical value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
@@ -849,9 +856,58 @@ namespace NanoJson {
 		}
 
 		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return this.TryGetNumber<T>(key.AsSpan());
+		}
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return this.TryGetNumber(key.AsSpan(), out @out);
+		}
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public T TryGetNumber<T>(ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			this.TryGetNumber(key, out T value);
+			return value;
+		}
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber<T>(ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			if (this.TryGetKey(key, out nJson value) && value.Type == JsonType.Number) {
+				@out = value.GetNumberOfType<T>();
+				return true;
+			}
+			else {
+				@out = NJson.Number.GetEmpty<T>();
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.TryParse(this.Value, out bool value) && value;
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(string key) => this.TryGetKey(key, out nJson value) && value.GetBool;
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -2154,6 +2210,14 @@ namespace NanoJson {
 		public readonly double GetNumber => double.TryParse(this.ReferenceData.Span, out double value) ? value : double.NaN;
 
 		/// <summary>
+		/// Get the number contained inside This object
+		/// </summary>
+		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return double.TryParse(this.ReferenceData.Span, out double value) ? Number.GetValue<T>(value) : Number.GetEmpty<T>();
+		}
+
+
+		/// <summary>
 		/// Try to get the numerical value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
@@ -2187,6 +2251,49 @@ namespace NanoJson {
 			}
 		}
 
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return this.TryGetNumber<T>(key.AsSpan());
+		}
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			return this.TryGetNumber(key.AsSpan(), out @out);
+		}
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public T TryGetNumber<T>(ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			this.TryGetNumber(key, out T value);
+			return value;
+		}
+
+		/// <summary>
+		/// Try to get the numerical value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetNumber<T>(ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			if (this.TryGetKey(key, out NJson value) && value.Type == JsonType.Number) {
+				@out = value.GetNumberOfType<T>();
+				return true;
+			}
+			else {
+				@out = Number.GetEmpty<T>();
+				return false;
+			}
+		}
+
 
 		/// <summary>
 		/// Get the values contained inside This object but as a new array
@@ -2212,6 +2319,13 @@ namespace NanoJson {
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.TryParse(this.ReferenceData.Span, out bool value) && value;
+
+		/// <summary>
+		/// Try to get the bool value of the object at path
+		/// </summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		public bool TryGetBool(string key) => this.GetKeyOrEmpty(key.AsSpan()).GetBool;
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
@@ -2353,6 +2467,42 @@ namespace NanoJson {
 			}
 			else {
 				return new nJson(self.KeyData.Span, self.ReferenceData.Span);
+			}
+		}
+
+		internal static class Number {
+			public static T GetValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+				return (T)(object)(typeof(T).Name switch {
+					"SByte" => Convert.ToSByte(value),
+					"Byte" => Convert.ToByte(value),
+					"Int16" => Convert.ToInt16(value),
+					"UInt16" => Convert.ToUInt16(value),
+					"Int32" => Convert.ToInt32(value),
+					"UInt32" => Convert.ToUInt32(value),
+					"Int64" => Convert.ToInt64(value),
+					"UInt64" => Convert.ToUInt64(value),
+					"Single" => Convert.ToSingle(value),
+					"Double" => value,
+					"Decimal" => Convert.ToDecimal(value),
+					_ => throw new NotSupportedException(typeof(T).Name),
+				});
+			}
+
+			public static T GetEmpty<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+				return (T)(object)(typeof(T).Name switch {
+					"SByte" => sbyte.Parse(stackalloc char[] { '0' }),
+					"Byte" => byte.Parse(stackalloc char[] { '0' }),
+					"Int16" => short.Parse(stackalloc char[] { '0' }),
+					"UInt16" => ushort.Parse(stackalloc char[] { '0' }),
+					"Int32" => int.Parse(stackalloc char[] { '0' }),
+					"UInt32" => uint.Parse(stackalloc char[] { '0' }),
+					"Int64" => long.Parse(stackalloc char[] { '0' }),
+					"UInt64" => ulong.Parse(stackalloc char[] { '0' }),
+					"Single" => float.Parse(stackalloc char[] { '0' }),
+					"Double" => 0.0d,
+					"Decimal" => decimal.Parse(stackalloc char[] { '0' }),
+					_ => throw new NotSupportedException(typeof(T).Name),
+				});
 			}
 		}
 	}
