@@ -1571,9 +1571,11 @@ namespace NanoJson {
 		public enum ToStringFormat : byte {
 			Pretty = 0x1,
 			Decoded = 0x2,
+
+			All = Pretty + Decoded,
 		}
 
-		public readonly override string ToString() => this.ToString(ToStringFormat.Pretty | ToStringFormat.Decoded);
+		public readonly override string ToString() => this.ToString(ToStringFormat.All);
 
 		public readonly string ToString(in ToStringFormat format) {
 			int count = 0;
