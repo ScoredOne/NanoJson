@@ -195,7 +195,7 @@ Because of nJson's on demand nature, ToString functionality is not available, it
 ### TryGet*
 
 Indexers are designed to throw, values that you are absolutely certain exist are aquired through indexers.  
-To allow null returns on attemps, Try methods are provided. When failing to aquire a value, it will return the static Empty value (As structs cant be null).  
+To allow null returns on attempts, Try methods are provided. When failing to aquire a value, it will return the static Empty value (As structs cant be null).  
 Provide the key just like the indexer.  
 
 ```CS
