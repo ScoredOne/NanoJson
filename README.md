@@ -166,3 +166,53 @@ private void Index(string jsonData) {
 ```  
 
 No arrays are used in nJson so compromises must be made and the indexer was one of them.
+
+## Extracting Json
+
+### ToString
+
+As NJson is a constructed format, ToString has been developed to provide the structure as a String.  
+(Although sounding simple, remember no additional allocation)  
+The body and sub values are evaluated to determin the character total required, rents the space and writes to it. The gives the result to String to create the output.  
+```CS
+private void GetString(string jsonData) {
+    NJson NanoJ = NJson.ParseJson(jsonData);
+    string jsonString = NanoJ.ToString();
+}
+```  
+A enum is also provided for additional settings.  
+Via the provided enum ToStringFormat you can combine options for ToString.  
+```CS
+private void GetString(string jsonData) {
+    NJson NanoJ = NJson.ParseJson(jsonData);
+    string jsonString = NanoJ.ToString(ToStringFormat.Pretty | ToStringFormat.Decoded);
+
+    // NanoJ.ToString() == NanoJ.ToString(ToStringFormat.All)
+}
+```  
+Because of nJson's on demand nature, ToString functionality is not available, it will need to be pinned to extract it. (Future feature consideration)  
+
+### TryGet*
+
+Indexers are designed to throw, values that you are absolutely certain exist are aquired through indexers.  
+To allow null returns on attemps, Try methods are provided. When failing to aquire a value, it will return the static Empty value (As structs cant be null).  
+Provide the key just like the indexer.  
+
+```CS
+private void TryGet(string jsonData) {
+    NJson NanoJ = NJson.ParseJson(jsonData);
+    nJson nJ = new nJson(jsonData);
+
+    if (NanoJ.TryGetKey("name.name.value", out NJson value)) {
+        ...
+    } else {
+        ... // value == NJson.Empty
+    }
+
+    if (nJ.TryGetKey("name.name.value", out nJson value)) {
+        ...
+    } else {
+        ... // value == nJson.Empty
+    }
+}
+``` 
