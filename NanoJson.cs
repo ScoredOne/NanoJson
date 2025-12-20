@@ -23,21 +23,22 @@ namespace NanoJson {
 	public readonly ref struct nJson {
 		public ref struct Enumerator {
 			private readonly nJson owner;
-			private int index;
+			private readonly int len;
+
 			private nJson current;
 
+			private int index;
 			private int x;
 			private int y;
-			private readonly int len;
 			private int debth;
 			private int arrayPos;
 
 			internal Enumerator(nJson owner) {
 				this.owner = owner;
-				this.index = -1;
+				this.len = owner.Value.Length;
 				this.current = nJson.Empty;
 
-				this.len = owner.Value.Length;
+				this.index = -1;
 				this.x = 0;
 				this.y = -1;
 				this.debth = 0;
@@ -45,6 +46,17 @@ namespace NanoJson {
 			}
 
 			public readonly nJson Current => this.current;
+
+			public nJson this[int index]
+			{
+				get
+				{
+					if (this.TryGetIndex(index, out nJson value)) {
+						return value;
+					}
+					throw new IndexOutOfRangeException();
+				}
+			}
 
 			public bool TryGetIndex(int index, out nJson value) {
 				if (index < 0) {
@@ -1086,7 +1098,8 @@ namespace NanoJson {
 				case JsonType.Null:
 					if (data.KeyData.IsEmpty) {
 						return NJson.Empty;
-					} else {
+					}
+					else {
 						return new NJson(data.KeyData.ToArray());
 					}
 				case JsonType.Object:
@@ -1678,7 +1691,7 @@ namespace NanoJson {
 
 		[Flags]
 		public enum ToStringFormat : byte {
-   None = 0,
+			None = 0,
 			Pretty = 0x1,
 			Decoded = 0x2,
 
