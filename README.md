@@ -171,17 +171,17 @@ No arrays are used in nJson so compromises must be made and the indexer was one 
 
 ### ToString
 
-As NJson is a constructed format, ToString has been developed to provide the structure as a String.  
+As NJson is a constructed format, ToString has been implemented to provide the current structure as a String.  
 (Although sounding simple, remember no additional allocation)  
-The body and sub values are evaluated to determin the character total required, rents the space and writes to it. The gives the result to String to create the output.  
+The body and sub values are evaluated to determine the character total required, rents the space and writes to it. Then gives the result to new String to create the output.  
+Resulting in a body direct to string implimentation, no streams or string builders.  
 ```CS
 private void GetString(string jsonData) {
     NJson NanoJ = NJson.ParseJson(jsonData);
     string jsonString = NanoJ.ToString();
 }
 ```  
-A enum is also provided for additional settings.  
-Via the provided enum ToStringFormat you can combine options for ToString.  
+An enum is also provided for additional settings. Using ToStringFormat you can combine options for ToString.  
 ```CS
 private void GetString(string jsonData) {
     NJson NanoJ = NJson.ParseJson(jsonData);
@@ -190,7 +190,7 @@ private void GetString(string jsonData) {
     // NanoJ.ToString() == NanoJ.ToString(ToStringFormat.All)
 }
 ```  
-Because of nJson's on demand nature, ToString functionality is not available, it will need to be pinned to extract it. (Future feature consideration)  
+Because of nJson's on demand nature, ToString functionality is not currently available, it will need to be pinned to extract it. (Future feature consideration)  
 
 ### TryGet*
 
