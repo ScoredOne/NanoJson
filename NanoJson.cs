@@ -1043,15 +1043,7 @@ namespace NanoJson {
 			return NJson.ParseJson(key.AsMemory(), data.AsMemory());
 		}
 
-		public static NJson ParseJson(ReadOnlyMemory<char> key, string data) {
-			return NJson.ParseJson(key, data.AsMemory());
-		}
-
-		public static NJson ParseJson(string key, ReadOnlyMemory<char> data) {
-			return NJson.ParseJson(key.AsMemory(), data);
-		}
-
-		public static NJson ParseJson(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
+		private static NJson ParseJson(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
 			if (key.IsEmpty) {
 				return NJson.ParseJson(data);
 			}
@@ -1064,11 +1056,11 @@ namespace NanoJson {
 			return NJson.ParseJson(data.AsMemory());
 		}
 
-		public static NJson ParseJson(ReadOnlyMemory<char> data) {
+		private static NJson ParseJson(ReadOnlyMemory<char> data) {
 			return new NJson(data, false, -1);
 		}
 
-		public static NJson Pin(nJson data) { // Needs testing
+		public static NJson Pin(nJson data) {
 			if (data.IsNothing) {
 				return NJson.Empty;
 			}
@@ -1083,11 +1075,39 @@ namespace NanoJson {
 			return NJson.ParseJson(data.Key.ToString(), data.Value.ToString());
 		}
 
-		public static NJson CreateArray(string key, NJson[] data) {
-			return new NJson(key, JsonType.Array, data);
+		/// <summary>
+		/// Remakes the existing NJson object, usually an internal node, by allocating the segments to arrays. Typically needed when you want to deallocate a large Json string container but keeping its smaller internal nodes
+		/// </summary>
+		/// <param name="data"></param>
+		/// <returns></returns>
+		/// <exception cref="NotSupportedException"></exception>
+		public static NJson Pin(NJson data) {
+			switch (data.Type) {
+				case JsonType.Null:
+					if (data.KeyData.IsEmpty) {
+						return NJson.Empty;
+					} else {
+						return new NJson(data.KeyData.ToArray());
+					}
+				case JsonType.Object:
+				case JsonType.Array:
+					return new NJson(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray());
+				case JsonType.String:
+					return new NJson(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray(), true);
+				case JsonType.Number:
+					return new NJson(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, double.Parse(data.ReferenceData.Span));
+				case JsonType.Boolean:
+					return new NJson(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, bool.Parse(data.ReferenceData.Span));
+				default:
+					throw new NotSupportedException();
+			}
 		}
 
-		public static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data) {
+		public static NJson CreateArray(string key, NJson[] data) {
+			return NJson.CreateArray(key.AsMemory(), data);
+		}
+
+		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data) {
 			return new NJson(key, JsonType.Array, data);
 		}
 
@@ -1096,10 +1116,10 @@ namespace NanoJson {
 		}
 
 		public static NJson CreateObject(string key, NJson[] data) {
-			return new NJson(key, JsonType.Object, data);
+			return NJson.CreateObject(key, data);
 		}
 
-		public static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data) {
+		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data) {
 			return new NJson(key, JsonType.Object, data);
 		}
 
@@ -1108,43 +1128,43 @@ namespace NanoJson {
 		}
 
 		public static NJson CreateStringObject(string key, string data) {
-			return new NJson(key.AsMemory(), data.AsMemory(), true, -1);
+			return NJson.CreateStringObject(key.AsMemory(), data.AsMemory());
 		}
 
-		public static NJson CreateStringObject(string key, ReadOnlyMemory<char> data) {
-			return NJson.CreateStringObject(key.AsMemory(), data);
-		}
-
-		public static NJson CreateStringObject(ReadOnlyMemory<char> key, string data) {
-			return NJson.CreateStringObject(key, data.AsMemory());
-		}
-
-		public static NJson CreateStringObject(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
+		private static NJson CreateStringObject(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
 			return new NJson(key, data, true, -1);
 		}
 
 		public static NJson ContainValueInObject(string key, NJson data) {
-			return new NJson(key, data);
+			return NJson.ContainValueInObject(key.AsMemory(), data);
 		}
 
-		public static NJson ContainValueInObject(ReadOnlyMemory<char> key, NJson data) {
+		private static NJson ContainValueInObject(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, data);
 		}
 
 		public static NJson CreateBoolObject(string key, bool data) {
-			return new NJson(key, data);
+			return NJson.CreateBoolObject(key.AsMemory(), data);
 		}
 
-		public static NJson CreateBoolObject(ReadOnlyMemory<char> key, bool data) {
+		private static NJson CreateBoolObject(ReadOnlyMemory<char> key, bool data) {
 			return new NJson(key, data);
 		}
 
 		public static NJson CreateNumberObject(string key, double data) {
+			return NJson.CreateNumberObject(key.AsMemory(), data);
+		}
+
+		private static NJson CreateNumberObject(ReadOnlyMemory<char> key, double data) {
 			return new NJson(key, data);
 		}
 
-		public static NJson CreateNumberObject(ReadOnlyMemory<char> key, double data) {
-			return new NJson(key, data);
+		public static NJson CreateNullObject(string key) {
+			return NJson.CreateNullObject(key.AsMemory());
+		}
+
+		private static NJson CreateNullObject(ReadOnlyMemory<char> key) {
+			return new NJson(key);
 		}
 
 		public readonly static NJson Empty = new NJson();
@@ -1431,6 +1451,12 @@ namespace NanoJson {
 
 		private NJson(ReadOnlyMemory<char> key, JsonType type, params NJson[] contents) {
 			switch (type) {
+				case JsonType.Null:
+					this.Type = type;
+					this.InnerValues = NanoArray.Empty;
+					this.KeyData = key;
+					this.ReferenceData = ReadOnlyMemory<char>.Empty;
+					break;
 				case JsonType.Array:
 				case JsonType.Object:
 					this.Type = type;
@@ -1464,6 +1490,14 @@ namespace NanoJson {
 			this.KeyData = key;
 			this.Type = JsonType.Number;
 			this.ReferenceData = value.ToString().AsMemory();
+			this.InnerValues = NanoArray.Empty;
+		}
+
+		private NJson(string key) : this(key.AsMemory()) { }
+		private NJson(ReadOnlyMemory<char> key) {
+			this.KeyData = key;
+			this.Type = JsonType.Null;
+			this.ReferenceData = ReadOnlyMemory<char>.Empty;
 			this.InnerValues = NanoArray.Empty;
 		}
 
