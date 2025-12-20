@@ -1678,6 +1678,7 @@ namespace NanoJson {
 
 		[Flags]
 		public enum ToStringFormat : byte {
+   None = 0,
 			Pretty = 0x1,
 			Decoded = 0x2,
 
