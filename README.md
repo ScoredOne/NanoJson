@@ -1,13 +1,13 @@
 # NanoJson
 
-[![NuGet package](https://img.shields.io/nuget/v/Nerdbank.GitVersioning.svg)](https://www.nuget.org/packages/NJson)
+[![Static Badge](https://img.shields.io/badge/Nuget-Latest-teal?logo=nuget)](https://www.nuget.org/packages/NJson)
+[![Static Badge](https://img.shields.io/badge/Github-repo-blue?logo=github)](https://github.com/ScoredOne/NanoJson)
 
-NetStandard 2.1
+NetStandard 2.1  
 
-Small and simple Json Parser to minimise memory allocation of Json.
+Small and simple Json Parser to minimise memory allocation of Json.  
 
-
-Theory;
+Theory:
 - String goes in
 - Get Memory of String
 - Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
