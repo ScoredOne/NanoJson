@@ -1116,7 +1116,7 @@ namespace NanoJson {
 		}
 
 		public static NJson CreateObject(string key, NJson[] data) {
-			return NJson.CreateObject(key, data);
+			return NJson.CreateObject(key.AsMemory(), data);
 		}
 
 		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data) {
