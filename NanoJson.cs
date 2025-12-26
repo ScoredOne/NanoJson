@@ -19,7 +19,9 @@ using System.Buffers;
 
 namespace NanoJson {
 
+#pragma warning disable IDE1006 // Naming Styles
 	public readonly ref struct nJson {
+#pragma warning restore IDE1006 // Naming Styles
 		public ref struct Enumerator {
 			private readonly nJson owner;
 			private readonly int len;
@@ -249,54 +251,50 @@ namespace NanoJson {
 		public nJson(string data) : this(data.AsSpan()) { }
 		public nJson(Span<char> data) : this((ReadOnlySpan<char>)data) { }
 		public nJson(ReadOnlySpan<char> data) {
-			this.Value = data.Trim();
 			this.Key = ReadOnlySpan<char>.Empty;
-			if (this.Value.IsWhiteSpace()) {
+			if (data.IsWhiteSpace()) {
 				this.Type = JsonType.Null;
+				this.Value = ReadOnlySpan<char>.Empty;
 				this.IsEmpty = true;
 				return;
 			}
 
 			int x = 0;
-			char c = this.Value[0];
-			while (char.IsWhiteSpace(c)) {
-				c = this.Value[++x];
-			}
-			switch (c) {
-				case '"': {
+			char c;
+			while (true) {
+				c = data[x];
+				if (char.IsWhiteSpace(c)) {
+					x++;
+				}
+				else if (c == '"') {
 					this.Type = JsonType.String;
+					this.Value = data.Slice(x);
 					int first = ++x;
-					x = this.Value.Length - 1;
+					x = this.Value.Length;
 
-					while (true) {
-						if (this.Value[x] == '"') {
-							break;
-						}
-						x--;
-					}
+					while (this.Value[--x] != '"') { }
 
 					if (x < first) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
-					if (first == x) {
+					else if (first == x) {
 						this.Value = string.Empty.AsSpan();
 						this.IsEmpty = true;
 						return;
 					}
-					this.Value = this.Value[first..x];
-					this.IsEmpty = false;
+					else {
+						this.Value = this.Value[first..x];
+						this.IsEmpty = false;
+					}
 					return;
 				}
-				case '[': {
+				else if (c == '[') {
 					this.Type = JsonType.Array;
+					this.Value = data.Slice(x);
 					int first = x;
 					int len = this.Value.Length;
 
-					while (true) {
-						if (this.Value[--len] == ']') {
-							break;
-						}
-					}
+					while (this.Value[--len] != ']') { }
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
@@ -312,16 +310,13 @@ namespace NanoJson {
 					this.IsEmpty = false;
 					return;
 				}
-				case '{': {
+				else if (c == '{') {
 					this.Type = JsonType.Object;
+					this.Value = data.Slice(x);
 					int first = x;
 					int len = this.Value.Length;
 
-					while (true) {
-						if (this.Value[--len] == '}') {
-							break;
-						}
-					}
+					while (this.Value[--len] != '}') { }
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
@@ -337,81 +332,42 @@ namespace NanoJson {
 					this.IsEmpty = false;
 					return;
 				}
-				case 't':
-				case 'T': {
-					this.Type = JsonType.Boolean;
-					this.IsEmpty = false;
-					if (this.Value.Length - x == 4) {
-						c = this.Value[++x];
-						if (c == 'r' || c == 'R') {
-							c = this.Value[++x];
-							if (c == 'u' || c == 'U') {
-								c = this.Value[++x];
-								if (c == 'e' || c == 'E') {
-									this.Value = bool.TrueString.AsSpan();
-									return;
-								}
-							}
-						}
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
-				}
-				case 'f':
-				case 'F': {
-					this.Type = JsonType.Boolean;
-					this.IsEmpty = false;
-					if (this.Value.Length - x == 5) {
-						c = this.Value[++x];
-						if (c == 'a' || c == 'A') {
-							c = this.Value[++x];
-							if (c == 'l' || c == 'L') {
-								c = this.Value[++x];
-								if (c == 's' || c == 'S') {
-									c = this.Value[++x];
-									if (c == 'e' || c == 'E') {
-										this.Value = bool.FalseString.AsSpan();
-										return;
-									}
-								}
-							}
-						}
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
-				}
-				case 'n':
-				case 'N': {
+				else if ((c & 'N') == 'N') {
 					this.Type = JsonType.Null;
-					this.IsEmpty = false;
-					if (this.Value.Length - x == 4) {
-						c = this.Value[++x];
-						if (c == 'u' || c == 'U') {
-							c = this.Value[++x];
-							if (c == 'l' || c == 'L') {
-								c = this.Value[++x];
-								if (c == 'l' || c == 'L') {
-									this.Value = NJson.NULL.AsSpan();
-									return;
-								}
-							}
-						}
+					this.Value = NJson.NULL.AsSpan();
+
+					if (this.Value.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
+						this.IsEmpty = false;
+						return;
 					}
 
 					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 				}
-				case '-':
-				case '0':
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-				case '8':
-				case '9': {
+				else if ((c & 'T') == 'T') {
+					this.Type = JsonType.Boolean;
+					this.Value = bool.TrueString.AsSpan();
+
+					if (this.Value.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
+						this.IsEmpty = false;
+						return;
+					}
+
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
+				}
+				else if ((c & 'F') == 'F') {
+					this.Type = JsonType.Boolean;
+					this.Value = bool.FalseString.AsSpan();
+
+					if (this.Value.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
+						this.IsEmpty = false;
+						return;
+					}
+
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
+				}
+				else if (c == '-' || char.IsDigit(c)) {
 					this.Type = JsonType.Number;
+					this.Value = data.Slice(x);
 					this.IsEmpty = false;
 
 					bool dec = false;
@@ -443,9 +399,10 @@ namespace NanoJson {
 
 					return;
 				}
+				else {
+					throw new ArgumentException($"Parse failed (TryParse: {data.ToString()})", nameof(data));
+				}
 			}
-			throw new ArgumentException($"Parse failed (TryParse: {data.ToString()})", nameof(data));
-
 		}
 
 		public readonly nJson this[ReadOnlySpan<char> key]
@@ -457,78 +414,27 @@ namespace NanoJson {
 				}
 				switch (this.Type) {
 					case JsonType.Object:
-						int pathLen = key.Length;
-						int nameLen = -1;
-
-						int x = 0;
-						int len = this.Value.Length;
-						int y = 0;
-						int debth = 0;
-
-						bool found = false;
-
-						while (true) {
-							while (this.Value[x] != '"') { x++; }
-							ReadOnlySpan<char> name;
-							if (this.Value[++x] == '"') {
-								name = ReadOnlySpan<char>.Empty;
-							}
-							else {
-								y = x;
-								while (this.Value[++x] != '"') { }
-								name = this.Value[y..x];
-							}
-
-							if (key.StartsWith(name)) {
-								nameLen = name.Length;
-								found = true;
-							}
-
-							while (this.Value[++x] != ':') { }
-							while (char.IsWhiteSpace(this.Value[++x])) { }
-							y = x;
-							while (true) {
-								switch (this.Value[x]) {
-									case '"':
-										while (this.Value[++x] != '"') { }
-										break;
-									case '{':
-									case '[':
-										debth++;
-										break;
-									case ']':
-										debth--;
-										break;
-									case '}':
-										if (--debth < 0) { // no comma found, process last segment
-											goto ProcessJsonObject;
-										}
-										break;
-									case ',':
-										if (debth == 0) {
-											goto ProcessJsonObject;
-										}
-										break;
-								}
-								x++;
-							}
-
-							ProcessJsonObject:
-							if (found) {
-								if (nameLen == pathLen) {
-									return new nJson(this.Value[y..x]);
-								}
-								else {
-									return new nJson(this.Value[y..x])[key[++nameLen..]];
-								}
-							}
-							else if (x == len) {
-								throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
-							}
+						if (this.TryGetKey(key, out nJson v)) {
+							return v;
 						}
+						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
 					default:
 						throw new InvalidOperationException();
 				}
+			}
+		}
+
+		public readonly nJson this[int index]
+		{
+			get
+			{
+				if (this.IsEmpty) {
+					throw new IndexOutOfRangeException("Body is Empty");
+				}
+				if (this.GetEnumerator().TryGetIndex(index, out nJson v)) {
+					return v;
+				}
+				throw new IndexOutOfRangeException();
 			}
 		}
 
@@ -609,125 +515,6 @@ namespace NanoJson {
 				else if (x == len) {
 					value = nJson.Empty;
 					return false;
-				}
-			}
-		}
-
-		public readonly nJson this[int index]
-		{
-			get
-			{
-				if (this.IsEmpty) {
-					throw new IndexOutOfRangeException("Body is Empty");
-				}
-				switch (this.Type) {
-					case JsonType.Object: {
-						int len = this.Value.Length;
-						int x = 0;
-						int y = 0;
-						int debth = 0;
-						int currentIndex = -1;
-						ReadOnlySpan<char> name;
-						while (true) {
-							while (this.Value[x] != '"') { x++; }
-							if (this.Value[++x] == '"') {
-								name = ReadOnlySpan<char>.Empty;
-							}
-							else {
-								y = x;
-								while (this.Value[++x] != '"') { }
-								name = this.Value[y..x];
-							}
-
-							while (this.Value[++x] != ':') { }
-							while (char.IsWhiteSpace(this.Value[++x])) { }
-							y = x;
-							currentIndex++;
-							while (true) {
-								switch (this.Value[x]) {
-									case '"':
-										while (this.Value[++x] != '"') { }
-										break;
-									case '{':
-									case '[':
-										debth++;
-										break;
-									case ']':
-										debth--;
-										break;
-									case '}':
-										if (--debth < 0) { // no comma found, process last segment
-											goto ProcessJsonObject;
-										}
-										break;
-									case ',':
-										if (debth == 0) {
-											goto ProcessJsonObject;
-										}
-										break;
-								}
-								x++;
-							}
-
-							ProcessJsonObject:
-							if (currentIndex == index) {
-								return new nJson(name, this.Value[y..x]);
-							}
-							else if (++x == len) {
-								throw new IndexOutOfRangeException();
-							}
-						}
-					}
-					case JsonType.Array: {
-						int x = 0;
-						int len = this.Value.Length;
-						while (this.Value[x++] != '[') { }
-						int y = x;
-						int debth = 1;
-						int arrayPos = 0;
-
-						while (true) {
-							while (true) {
-								switch (this.Value[x]) {
-									case '"':
-										while (this.Value[++x] != '"') { }
-										break;
-									case '[':
-									case '{':
-										debth++;
-										break;
-									case '}':
-										debth--;
-										break;
-									case ']':
-										if (--debth == 0) {
-											goto ProcessJsonObject;
-										}
-										break;
-									case ',':
-										if (debth == 1) {
-											goto ProcessJsonObject;
-										}
-										break;
-								}
-								x++;
-							}
-
-							ProcessJsonObject:
-							if (arrayPos == index) {
-								return new nJson(this.Value[y..x]);
-							}
-							else {
-								if (++x == len) {
-									throw new IndexOutOfRangeException();
-								}
-								y = x;
-								arrayPos++;
-							}
-						}
-					}
-					default:
-						throw new IndexOutOfRangeException();
 				}
 			}
 		}
@@ -1002,7 +789,7 @@ namespace NanoJson {
 				private readonly NanoArray owner;
 				private int index;
 
-				public readonly NJson Current => this.owner[this.index];
+				public readonly ref NJson Current => ref this.owner[this.index];
 
 				public Enumerator(NanoArray owner) {
 					this.owner = owner;
@@ -1013,36 +800,6 @@ namespace NanoJson {
 
 				public void Reset() => this.index = -1;
 			}
-		}
-
-		public ref struct Enumerator {
-			private readonly NJson owner;
-			private readonly int innerCount;
-			private int index;
-
-			internal Enumerator(NJson owner) {
-				this.owner = owner;
-				this.index = -1;
-				this.innerCount = owner.InnerValues.Length;
-			}
-
-			public readonly NJson Current => this.owner.InnerValues[this.index];
-
-			public bool MoveNext() {
-				switch (this.owner.Type) {
-					case JsonType.Object:
-					case JsonType.Array:
-						return ++this.index < this.innerCount;
-					default:
-						if (this.index == -1) {
-							this.index = 0;
-							return true;
-						}
-						return false;
-				}
-			}
-
-			public void Reset() => this.index = -1;
 		}
 
 
@@ -1197,50 +954,38 @@ namespace NanoJson {
 			ReadOnlySpan<char> data = reference.Span;
 			int x = 0;
 			int len = knownLen == -1 ? data.Length : knownLen;
-			Find:
-			switch (data[x]) {
-				case ' ':
-				case '\n':
-				case '\t':
-				case '\r':
-				case '\f':
-				case '\v':
+			char c;
+			while (true) {
+				c = data[x];
+				if (char.IsWhiteSpace(c)) {
 					x++;
-					goto Find;
-				case '"': {
+				}
+				else if (c == '"') {
 					this.Type = JsonType.String;
 					this.InnerValues = NanoArray.Empty;
 					int first = ++x;
-					x = len - 1;
 
-					while (true) {
-						if (data[x] == '"') {
-							break;
-						}
-						x--;
-					}
+					while (data[--len] != '"') { }
 
-					if (first == x) {
+					if (first == len) {
 						this.ReferenceData = string.Empty.AsMemory();
 						return;
 					}
-					if (x < first) {
+					else if (len < first) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 					}
+					else {
+						this.ReferenceData = reference[first..len];
+					}
 
-					this.ReferenceData = reference[first..x];
 					return;
 				}
-				case '[': {
+				else if (c == '[') {
 					this.Type = JsonType.Array;
-					this.ReferenceData = reference[x..];
+					this.ReferenceData = reference.Slice(x);
 					int first = x;
 
-					while (true) {
-						if (data[--len] == ']') {
-							break;
-						}
-					}
+					while (data[--len] != ']') { }
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
@@ -1288,16 +1033,12 @@ namespace NanoJson {
 					this.ProcessJsonArray(reference[first..len], innerLength);
 					return;
 				}
-				case '{': {
+				else if (c == '{') {
 					this.Type = JsonType.Object;
-					this.ReferenceData = reference[x..];
+					this.ReferenceData = reference.Slice(x);
 					int first = x;
 
-					while (true) {
-						if (data[--len] == '}') {
-							break;
-						}
-					}
+					while (data[--len] != '}') { }
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
@@ -1343,63 +1084,49 @@ namespace NanoJson {
 					this.ProcessJsonObject(reference[first..len], innerLength);
 					return;
 				}
-				case 't':
-				case 'T': {
-					this.Type = JsonType.Boolean;
-					this.InnerValues = NanoArray.Empty;
-					ReadOnlyMemory<char> trueMem = bool.TrueString.AsMemory();
-
-					if (trueMem.Span.Equals(data[x..], StringComparison.OrdinalIgnoreCase)) {
-						this.ReferenceData = trueMem;
-						return;
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-				}
-				case 'f':
-				case 'F': {
-					this.Type = JsonType.Boolean;
-					this.InnerValues = NanoArray.Empty;
-					ReadOnlyMemory<char> falseMem = bool.FalseString.AsMemory();
-
-					if (falseMem.Span.Equals(data[x..], StringComparison.OrdinalIgnoreCase)) {
-						this.ReferenceData = falseMem;
-						return;
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-				}
-				case 'n':
-				case 'N': {
+				else if ((c & 'N') == 'N') {
 					this.Type = JsonType.Null;
 					this.InnerValues = NanoArray.Empty;
 					ReadOnlyMemory<char> nullMem = NULL.AsMemory();
 
-					if (nullMem.Span.Equals(data[x..], StringComparison.OrdinalIgnoreCase)) {
+					if (nullMem.Span.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
 						this.ReferenceData = nullMem;
 						return;
 					}
 
 					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 				}
-				case '-':
-				case '0':
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-				case '8':
-				case '9': {
+				else if ((c & 'T') == 'T') {
+					this.Type = JsonType.Boolean;
+					this.InnerValues = NanoArray.Empty;
+					ReadOnlyMemory<char> trueMem = bool.TrueString.AsMemory();
+
+					if (trueMem.Span.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
+						this.ReferenceData = trueMem;
+						return;
+					}
+
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
+				}
+				else if ((c & 'F') == 'F') {
+					this.Type = JsonType.Boolean;
+					this.InnerValues = NanoArray.Empty;
+					ReadOnlyMemory<char> falseMem = bool.FalseString.AsMemory();
+
+					if (falseMem.Span.Equals(data.Slice(x), StringComparison.OrdinalIgnoreCase)) {
+						this.ReferenceData = falseMem;
+						return;
+					}
+
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
+				}
+				else if (c == '-' || char.IsDigit(c)) {
 					this.Type = JsonType.Number;
-					this.ReferenceData = reference[x..];
+					this.ReferenceData = reference.Slice(x);
 					this.InnerValues = NanoArray.Empty;
 
 					bool dec = false;
 					bool E = false;
-					char c;
 					while (++x < len) {
 						c = data[x];
 						if (c == '.') {
@@ -1424,8 +1151,10 @@ namespace NanoJson {
 
 					return;
 				}
+				else {
+					throw new ArgumentException($"Parse failed (TryParse: {data.ToString()})", nameof(reference));
+				}
 			}
-			throw new ArgumentException($"Parse failed (TryParse: {data.ToString()})", nameof(reference));
 		}
 
 		private NJson(JsonType type, params NJson[] contents) : this(ReadOnlyMemory<char>.Empty, type, contents) { }
@@ -2151,25 +1880,42 @@ namespace NanoJson {
 		}
 
 		public static int ReadHexNumber(char character) {
-			return character switch {
-				'0' => 0,
-				'1' => 1,
-				'2' => 2,
-				'3' => 3,
-				'4' => 4,
-				'5' => 5,
-				'6' => 6,
-				'7' => 7,
-				'8' => 8,
-				'9' => 9,
-				'A' => 10,
-				'B' => 11,
-				'C' => 12,
-				'D' => 13,
-				'E' => 14,
-				'F' => 15,
-				_ => throw new InvalidOperationException($"{nameof(character)} '{character}' is not a hex number")
-			};
+			switch (character) {
+				case '0':
+					return 0;
+				case '1':
+					return 1;
+				case '2':
+					return 2;
+				case '3':
+					return 3;
+				case '4':
+					return 4;
+				case '5':
+					return 5;
+				case '6':
+					return 6;
+				case '7':
+					return 7;
+				case '8':
+					return 8;
+				case '9':
+					return 9;
+				case 'A':
+					return 10;
+				case 'B':
+					return 11;
+				case 'C':
+					return 12;
+				case 'D':
+					return 13;
+				case 'E':
+					return 14;
+				case 'F':
+					return 15;
+				default:
+					throw new InvalidOperationException($"{nameof(character)} '{character}' is not a hex number");
+			}
 		}
 
 		/// <summary>
@@ -2438,7 +2184,7 @@ namespace NanoJson {
 				int pathLen = key.Length;
 				int innerCount = this.InnerValues.Length;
 				for (int x = 0; x < innerCount; x++) {
-					NJson value = this.InnerValues[x];
+					ref NJson value = ref this.InnerValues[x];
 					ReadOnlySpan<char> valueKey = value.KeyData.Span;
 					int len = valueKey.Length;
 					if (pathLen == len) {
@@ -2468,7 +2214,7 @@ namespace NanoJson {
 		/// </summary>
 		public readonly NJson GetKeyOrEmpty(ReadOnlySpan<char> key) => this.TryGetKey(key, out NJson found) ? found : NJson.Empty;
 
-		public readonly Enumerator GetEnumerator() => new Enumerator(this);
+		public readonly NanoArray.Enumerator GetEnumerator() => this.InnerValues.GetEnumerator();
 
 		public readonly override bool Equals(object obj) => obj is NJson other && this.Equals(other);
 		public readonly bool Equals(NJson other) {
@@ -2505,37 +2251,70 @@ namespace NanoJson {
 		}
 
 		internal static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return (T)(object)(typeof(T).Name switch {
-				"SByte" => Convert.ToSByte(value),
-				"Byte" => Convert.ToByte(value),
-				"Int16" => Convert.ToInt16(value),
-				"UInt16" => Convert.ToUInt16(value),
-				"Int32" => Convert.ToInt32(value),
-				"UInt32" => Convert.ToUInt32(value),
-				"Int64" => Convert.ToInt64(value),
-				"UInt64" => Convert.ToUInt64(value),
-				"Single" => Convert.ToSingle(value),
-				"Double" => value,
-				"Decimal" => Convert.ToDecimal(value),
-				_ => throw new NotSupportedException(typeof(T).Name),
-			});
+			Type neededType = typeof(T);
+			switch (typeof(T).Name) {
+				case "SByte":
+					if (Convert.ToSByte(value) is T sb) {
+						return sb;
+					}
+					goto default;
+				case "Byte":
+					if (Convert.ToByte(value) is T b) {
+						return b;
+					}
+					goto default;
+				case "Int16":
+					if (Convert.ToInt16(value) is T s) {
+						return s;
+					}
+					goto default;
+				case "UInt16":
+					if (Convert.ToUInt16(value) is T us) {
+						return us;
+					}
+					goto default;
+				case "Int32":
+					if (Convert.ToInt32(value) is T i) {
+						return i;
+					}
+					goto default;
+				case "UInt32":
+					if (Convert.ToUInt32(value) is T ui) {
+						return ui;
+					}
+					goto default;
+				case "Int64":
+					if (Convert.ToInt64(value) is T l) {
+						return l;
+					}
+					goto default;
+				case "UInt64":
+					if (Convert.ToUInt64(value) is T ul) {
+						return ul;
+					}
+					goto default;
+				case "Single":
+					if (Convert.ToSingle(value) is T f) {
+						return f;
+					}
+					goto default;
+				case "Double":
+					if (value is T d) {
+						return d;
+					}
+					goto default;
+				case "Decimal":
+					if (Convert.ToDecimal(value) is T de) {
+						return de;
+					}
+					goto default;
+				default:
+					throw new NotSupportedException(typeof(T).Name);
+			}
 		}
 
 		internal static T GetEmpty<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return (T)(object)(typeof(T).Name switch {
-				"SByte" => (sbyte)0,
-				"Byte" => (byte)0,
-				"Int16" => (short)0,
-				"UInt16" => (ushort)0,
-				"Int32" => 0,
-				"UInt32" => (uint)0,
-				"Int64" => (long)0,
-				"UInt64" => (ulong)0,
-				"Single" => 0.0f,
-				"Double" => 0.0d,
-				"Decimal" => (decimal)0,
-				_ => throw new NotSupportedException(typeof(T).Name),
-			});
+			return default;
 		}
 	}
 }
