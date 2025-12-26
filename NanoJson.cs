@@ -616,7 +616,7 @@ namespace NanoJson {
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return double.TryParse(this.Value, out double value) ? NJson.GetConvertedValue<T>(value) : NJson.GetEmpty<T>();
+			return double.TryParse(this.Value, out double value) ? NJson.GetConvertedValue<T>(value) : default;
 		}
 
 		/// <summary>
@@ -690,7 +690,7 @@ namespace NanoJson {
 				return true;
 			}
 			else {
-				@out = NJson.GetEmpty<T>();
+				@out = default;
 				return false;
 			}
 		}
@@ -1977,7 +1977,7 @@ namespace NanoJson {
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return double.TryParse(this.ReferenceData.Span, out double value) ? GetConvertedValue<T>(value) : GetEmpty<T>();
+			return double.TryParse(this.ReferenceData.Span, out double value) ? GetConvertedValue<T>(value) : default;
 		}
 
 
@@ -2053,7 +2053,7 @@ namespace NanoJson {
 				return true;
 			}
 			else {
-				@out = GetEmpty<T>();
+				@out = default;
 				return false;
 			}
 		}
@@ -2311,10 +2311,6 @@ namespace NanoJson {
 				default:
 					throw new NotSupportedException(typeof(T).Name);
 			}
-		}
-
-		internal static T GetEmpty<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return default;
 		}
 	}
 }
