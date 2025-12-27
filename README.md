@@ -24,29 +24,29 @@ Job=.NET 9.0  Runtime=.NET 9.0
 
 | Method         | format             | Mean          | Error        | StdDev       | Gen0    | Gen1    | Gen2    | Allocated |
 |--------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
-| nJson*         | JustParse          |      34.96 ns |     0.253 ns |     0.237 ns |       - |       - |       - |         - |
-| NJson          | JustParse          | 257,401.51 ns | 4,798.503 ns | 4,488.523 ns |  4.3945 |  0.9766 |       - |   74928 B |
-| SystemTextJson | JustParse          | 135,840.36 ns | 1,407.106 ns | 1,316.208 ns |  5.6152 |  0.4883 |       - |   95720 B |
-| LightJson      | JustParse          | 332,915.28 ns | 6,645.715 ns | 6,216.406 ns | 32.2266 | 14.1602 |       - |  542440 B |
-| NewtonsoftJson | JustParse          | 490,189.47 ns | 8,933.286 ns | 8,356.202 ns | 36.1328 | 23.4375 |       - |  616064 B |
+| nJson*         | JustParse          |      43.43 ns |     0.053 ns |     0.049 ns |       - |       - |       - |         - |
+| NJson          | JustParse          | 251,087.78 ns | 2,679.245 ns | 2,506.168 ns |  3.4180 |  0.4883 |       - |   61920 B |
+| SystemTextJson | JustParse          | 135,782.57 ns |   484.123 ns |   429.162 ns |  5.6152 |  0.4883 |       - |   95720 B |
+| LightJson      | JustParse          | 346,983.09 ns | 4,893.522 ns | 4,577.404 ns | 32.2266 | 14.1602 |       - |  542440 B |
+| NewtonsoftJson | JustParse          | 486,106.12 ns | 2,195.694 ns | 1,946.425 ns | 36.6211 | 24.4141 |       - |  616064 B |
 |                |                    |               |              |              |         |         |         |           |
-| nJson*         | ParseToString      | 116,087.74 ns | 2,220.724 ns | 2,077.266 ns | 35.6445 | 35.6445 | 35.6445 |  114204 B |
-| NJson          | ParseToString      | 448,532.13 ns | 6,183.289 ns | 5,481.324 ns | 30.2734 | 30.2734 | 30.2734 |  171146 B |
-| SystemTextJson | ParseToString      | 252,498.30 ns | 2,280.401 ns | 2,021.516 ns | 27.3438 | 27.3438 | 27.3438 |  183732 B |
-| LightJson      | ParseToString      | 495,948.28 ns | 7,350.923 ns | 6,516.402 ns | 42.4805 | 20.9961 |       - |  714936 B |
-| NewtonsoftJson | ParseToString      | 631,081.54 ns | 7,874.481 ns | 6,980.522 ns | 54.6875 | 53.7109 | 27.3438 |  801977 B |
+| nJson*         | ParseToString      | 117,350.99 ns |   944.409 ns |   837.194 ns | 35.6445 | 35.6445 | 35.6445 |  114204 B |
+| NJson          | ParseToString      | 392,163.70 ns | 2,750.329 ns | 2,438.095 ns |  8.3008 |  0.9766 |       - |  141552 B |
+| SystemTextJson | ParseToString      | 247,326.05 ns | 1,885.486 ns | 1,671.435 ns | 27.3438 | 27.3438 | 27.3438 |  183732 B |
+| LightJson      | ParseToString      | 485,330.54 ns | 1,673.183 ns | 1,483.233 ns | 42.4805 | 20.9961 |       - |  714936 B |
+| NewtonsoftJson | ParseToString      | 632,642.24 ns | 5,754.675 ns | 4,805.414 ns | 54.6875 | 53.7109 | 27.3438 |  801977 B |
 |                |                    |               |              |              |         |         |         |           |
-| nJson          | ParseReformat      | 415,652.83 ns | 3,881.399 ns | 3,241.144 ns |  5.8594 |  0.4883 |       - |  105064 B |
-| NJson          | ParseReformat      | 362,175.70 ns | 2,553.769 ns | 2,388.797 ns | 10.7422 |       - |       - |  179992 B |
-| SystemTextJson | ParseReformat      | 320,474.14 ns | 6,093.533 ns | 6,772.946 ns | 23.4375 |  9.7656 |       - |  415688 B |
-| LightJson      | ParseReformat      | 453,788.29 ns | 6,940.725 ns | 6,152.772 ns | 42.9688 | 18.0664 |       - |  725168 B |
-| NewtonsoftJson | ParseReformat      | 651,335.42 ns | 8,306.892 ns | 7,770.272 ns | 54.6875 | 41.0156 |       - |  928080 B |
+| nJson          | ParseReformat      | 407,302.32 ns | 1,978.304 ns | 1,850.507 ns |  5.8594 |  0.4883 |       - |  105744 B |
+| NJson          | ParseReformat      | 343,789.45 ns | 1,367.500 ns | 1,212.253 ns |  8.7891 |       - |       - |  153792 B |
+| SystemTextJson | ParseReformat      | 317,485.20 ns | 1,923.727 ns | 1,799.455 ns | 24.4141 | 10.7422 |       - |  415688 B |
+| LightJson      | ParseReformat      | 441,233.96 ns | 2,764.007 ns | 2,585.454 ns | 42.9688 | 18.0664 |       - |  725168 B |
+| NewtonsoftJson | ParseReformat      | 672,066.93 ns | 7,962.808 ns | 7,448.415 ns | 54.6875 | 41.0156 |       - |  928080 B |
 |                |                    |               |              |              |         |         |         |           |
-| nJson          | ParseToSingleValue |  34,791.47 ns |   265.735 ns |   248.568 ns |       - |       - |       - |      56 B |
-| NJson          | ParseToSingleValue | 254,382.96 ns | 3,170.271 ns | 2,810.363 ns |  4.3945 |  0.4883 |       - |   74984 B |
-| SystemTextJson | ParseToSingleValue | 138,601.18 ns | 1,357.285 ns | 1,269.605 ns |  5.8594 |  0.9766 |       - |   99992 B |
-| LightJson      | ParseToSingleValue | 339,216.17 ns | 5,939.660 ns | 5,555.962 ns | 32.2266 | 14.1602 |       - |  542440 B |
-| NewtonsoftJson | ParseToSingleValue | 463,301.21 ns | 4,649.561 ns | 4,121.714 ns | 36.6211 | 24.4141 |       - |  616064 B |
+| nJson          | ParseToSingleValue |  42,937.11 ns |    93.032 ns |    87.022 ns |       - |       - |       - |      56 B |
+| NJson          | ParseToSingleValue | 251,638.21 ns | 3,553.146 ns | 3,323.615 ns |  3.4180 |  0.4883 |       - |   61976 B |
+| SystemTextJson | ParseToSingleValue | 138,250.64 ns |   653.268 ns |   611.067 ns |  5.8594 |  0.9766 |       - |   99992 B |
+| LightJson      | ParseToSingleValue | 326,678.29 ns | 2,247.122 ns | 2,101.960 ns | 32.2266 | 14.1602 |       - |  542440 B |
+| NewtonsoftJson | ParseToSingleValue | 557,788.74 ns | 4,172.266 ns | 3,902.740 ns | 36.1328 | 23.4375 |       - |  616064 B |
 
 *nJson doesnt parse on data insersion, JustParse is the speed for the class to be ready without parsing, ParseToString takes the received data and Decodes it without structure read or parsing.  
 
