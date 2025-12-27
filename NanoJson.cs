@@ -113,18 +113,30 @@ namespace NanoJson {
 							}
 							else {
 								this.y = this.x;
-								while (this.owner.Value[++this.x] != '"') { }
+								while (true) {
+									if (this.owner.Value[++this.x] == '"') {
+										break;
+									}
+								}
 								name = this.owner.Value[this.y..this.x];
 							}
 
-							while (this.owner.Value[++this.x] != ':') { }
+							while (true) {
+								if (this.owner.Value[++this.x] == ':') {
+									break;
+								}
+							}
 							while (char.IsWhiteSpace(this.owner.Value[++this.x])) { }
 							this.y = this.x;
 							this.index++;
 							while (true) {
 								switch (this.owner.Value[this.x]) {
 									case '"':
-										while (this.owner.Value[++this.x] != '"') { }
+										while (true) {
+											if (this.owner.Value[++this.x] == '"') {
+												break;
+											}
+										}
 										break;
 									case '{':
 									case '[':
@@ -163,7 +175,11 @@ namespace NanoJson {
 						}
 						this.index++;
 						if (this.y == -1) {
-							while (this.owner.Value[this.x++] != '[') { }
+							while (true) {
+								if (this.owner.Value[this.x++] == '[') {
+									break;
+								}
+							}
 						}
 						this.y = this.x;
 						this.debth = 1;
@@ -172,7 +188,11 @@ namespace NanoJson {
 							while (true) {
 								switch (this.owner.Value[this.x]) {
 									case '"':
-										while (this.owner.Value[++this.x] != '"') { }
+										while (true) {
+											if (this.owner.Value[++this.x] == '"') {
+												break;
+											}
+										}
 										break;
 									case '[':
 									case '{':
@@ -270,7 +290,11 @@ namespace NanoJson {
 					int first = ++x;
 					x = data.Length;
 
-					while (data[--x] != '"') { }
+					while (true) {
+						if (data[--x] == '"') {
+							break;
+						}
+					}
 
 					if (x < first) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
@@ -290,7 +314,11 @@ namespace NanoJson {
 					int first = x;
 					int len = data.Length;
 
-					while (data[--len] != ']') { }
+					while (true) {
+						if (data[--len] == ']') {
+							break;
+						}
+					}
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
@@ -311,7 +339,11 @@ namespace NanoJson {
 					int first = x;
 					int len = data.Length;
 
-					while (data[--len] != '}') { }
+					while (true) {
+						if (data[--len] == '}') {
+							break;
+						}
+					}
 
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
@@ -420,7 +452,7 @@ namespace NanoJson {
 						}
 						else if (c == 'e' || c == 'E') {
 							if (E
-								|| ((c = this.Value[++x]) != '+' && c != '-')
+								|| !((c = this.Value[++x]) == '+' || c == '-')
 								|| !char.IsDigit(this.Value[++x])) {
 								throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 							}
@@ -481,20 +513,29 @@ namespace NanoJson {
 
 			int x = 0;
 			int len = this.Value.Length;
-			int y = 0;
+			int y;
 			int debth = 0;
 
 			bool found = false;
 
 			while (true) {
-				while (this.Value[x] != '"') { x++; }
+				while (true) {
+					if (this.Value[x] == '"') {
+						break;
+					}
+					x++;
+				}
 				ReadOnlySpan<char> name;
 				if (this.Value[++x] == '"') {
 					name = ReadOnlySpan<char>.Empty;
 				}
 				else {
 					y = x;
-					while (this.Value[++x] != '"') { }
+					while (true) {
+						if (this.Value[++x] == '"') {
+							break;
+						}
+					}
 					name = this.Value[y..x];
 				}
 
@@ -503,13 +544,21 @@ namespace NanoJson {
 					found = true;
 				}
 
-				while (this.Value[++x] != ':') { }
+				while (true) {
+					if (this.Value[++x] == ':') {
+						break;
+					}
+				}
 				while (char.IsWhiteSpace(this.Value[++x])) { }
 				y = x;
 				while (true) {
 					switch (this.Value[x]) {
 						case '"':
-							while (this.Value[++x] != '"') { }
+							while (true) {
+								if (this.Value[++x] == '"') {
+									break;
+								}
+							}
 							break;
 						case '{':
 						case '[':
@@ -1007,12 +1056,14 @@ namespace NanoJson {
 					if (len < first) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 					}
-					if (first == len) {
+					else if (first == len) {
 						this.ReferenceData = string.Empty.AsMemory();
 						return;
 					}
-					this.ReferenceData = reference[first..len];
-					return;
+					else {
+						this.ReferenceData = reference[first..len];
+						return;
+					}
 				}
 				case '[': {
 					this.Type = JsonType.Array;
@@ -1032,17 +1083,19 @@ namespace NanoJson {
 						this.InnerValues = NanoArray.Empty;
 						return;
 					}
-					len++;
-					x = first;
 
 					if (innerLength == -1) {
-						int items = 1;
 						int debth = 0;
+						x = first;
 
 						while (true) {
 							switch (data[x]) {
 								case '"':
-									while (data[++x] != '"') { }
+									while (true) {
+										if (data[++x] == '"') {
+											break;
+										}
+									}
 									break;
 								case '{':
 								case '[':
@@ -1056,18 +1109,17 @@ namespace NanoJson {
 									break;
 								case ',':
 									if (debth == 1) {
-										items++;
+										innerLength++;
 									}
 									break;
 							}
 							x++;
 						}
-						Fin:
-						innerLength = items; // Cant set this value from methods
 					}
+					Fin:
 					this.InnerValues = new NanoArray(innerLength);
 
-					this.ProcessJsonArray(reference[first..len], innerLength);
+					this.ProcessJsonArray(reference, first, innerLength);
 					return;
 				}
 				case '{': {
@@ -1088,16 +1140,18 @@ namespace NanoJson {
 						this.InnerValues = NanoArray.Empty;
 						return;
 					}
-					len++;
-					x = first;
 
 					if (innerLength == -1) {
-						int items = 1;
 						int debth = 0;
+						x = first;
 						while (true) {
 							switch (data[x]) {
 								case '"':
-									while (data[++x] != '"') { }
+									while (true) {
+										if (data[++x] == '"') {
+											break;
+										}
+									}
 									break;
 								case '{':
 								case '[':
@@ -1111,18 +1165,17 @@ namespace NanoJson {
 									break;
 								case ',':
 									if (debth == 1) {
-										items++;
+										innerLength++;
 									}
 									break;
 							}
 							x++;
 						}
-						Fin:
-						innerLength = items; // Cant set this value from methods
 					}
+					Fin:
 					this.InnerValues = new NanoArray(innerLength);
 
-					this.ProcessJsonObject(reference[first..len], innerLength);
+					this.ProcessJsonObject(reference, first, innerLength);
 					return;
 				}
 				case 'n':
@@ -1216,7 +1269,7 @@ namespace NanoJson {
 						}
 						else if (c == 'e' || c == 'E') {
 							if (E
-								|| ((c = data[++x]) != '+' && c != '-')
+								|| !((c = data[++x]) == '+' || c == '-')
 								|| !char.IsDigit(data[++x])) {
 								throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 							}
@@ -1341,10 +1394,14 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="reference">Value found after the colon</param>
 		/// <param name="len">Length of the reference area</param>
-		private readonly void ProcessJsonArray(ReadOnlyMemory<char> reference, int innerCount) {
+		private readonly void ProcessJsonArray(ReadOnlyMemory<char> reference, int start, int innerCount) {
 			ReadOnlySpan<char> data = reference.Span;
-			int x = 0;
-			while (data[x++] != '[') { }
+			int x = start;
+			while (true) {
+				if (data[x++] == '[') {
+					break;
+				}
+			}
 			int y = x;
 			int debth = 1;
 			int index = 0;
@@ -1355,7 +1412,11 @@ namespace NanoJson {
 				while (true) {
 					switch (data[x]) {
 						case '"':
-							while (data[++x] != '"') { }
+							while (true) {
+								if (data[++x] == '"') {
+									break;
+								}
+							}
 							break;
 						case '[':
 						case '{':
@@ -1395,35 +1456,52 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="reference">Value found after the colon</param>
 		/// <param name="len">Length of the reference area</param>
-		private readonly void ProcessJsonObject(ReadOnlyMemory<char> reference, int innerCount) {
+		private readonly void ProcessJsonObject(ReadOnlyMemory<char> reference, int start, int innerCount) {
 			ReadOnlySpan<char> data = reference.Span;
 
-			int x = 0;
-			int y = 0;
+			int x = start;
+			int y;
 			int debth = 0;
 			int index = 0;
 			int innerSize;
 
 			while (true) {
-				while (data[x] != '"') { x++; }
+				while (true) {
+					if (data[x] == '"') {
+						break;
+					}
+					x++;
+				}
 				ReadOnlyMemory<char> name;
 				if (data[++x] == '"') {
 					name = ReadOnlyMemory<char>.Empty;
 				}
 				else {
 					y = x;
-					while (data[++x] != '"') { }
+					while (true) {
+						if (data[++x] == '"') {
+							break;
+						}
+					}
 					name = reference[y..x];
 				}
 
-				while (data[++x] != ':') { }
+				while (true) {
+					if (data[++x] == ':') {
+						break;
+					}
+				}
 				while (char.IsWhiteSpace(data[++x])) { }
 				y = x;
 				innerSize = 1;
 				while (true) {
 					switch (data[x]) {
 						case '"':
-							while (data[++x] != '"') { }
+							while (true) {
+								if (data[++x] == '"') {
+									break;
+								}
+							}
 							break;
 						case '{':
 						case '[':
@@ -1873,14 +1951,9 @@ namespace NanoJson {
 			int x = 0;
 			int len = this.ReferenceData.Length;
 			ReadOnlySpan<char> data = this.ReferenceData.Span;
-			char c;
 			while (x < len) {
-				c = data[x];
-				if (c == '\\') {
-					c = data[++x];
-					if (c == 'u') {
-						x += 4;
-					}
+				if (data[x] == '\\' && data[++x] == 'u') {
+					x += 4;
 				}
 				count++;
 				x++;
@@ -1948,41 +2021,11 @@ namespace NanoJson {
 		}
 
 		public static int ReadHexNumber(char character) {
-			switch (character) {
-				case '0':
-					return 0;
-				case '1':
-					return 1;
-				case '2':
-					return 2;
-				case '3':
-					return 3;
-				case '4':
-					return 4;
-				case '5':
-					return 5;
-				case '6':
-					return 6;
-				case '7':
-					return 7;
-				case '8':
-					return 8;
-				case '9':
-					return 9;
-				case 'A':
-					return 10;
-				case 'B':
-					return 11;
-				case 'C':
-					return 12;
-				case 'D':
-					return 13;
-				case 'E':
-					return 14;
-				case 'F':
-					return 15;
-				default:
-					throw new InvalidOperationException($"{nameof(character)} '{character}' is not a hex number");
+			if (character < 'A') {
+				return character - '0';
+			}
+			else {
+				return 10 + (character - 'A');
 			}
 		}
 
@@ -2319,7 +2362,6 @@ namespace NanoJson {
 		}
 
 		internal static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			Type neededType = typeof(T);
 			switch (typeof(T).Name) {
 				case "SByte":
 					if (Convert.ToSByte(value) is T sb) {
