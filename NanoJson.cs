@@ -126,7 +126,7 @@ namespace NanoJson {
 									break;
 								}
 							}
-							while (char.IsWhiteSpace(this.owner.Value[++this.x])) { }
+							while (NJson.IsWhiteSpace(this.owner.Value[++this.x])) { }
 							this.y = this.x;
 							this.index++;
 							while (true) {
@@ -281,7 +281,7 @@ namespace NanoJson {
 
 			int x = 0;
 			char c = data[0];
-			while (char.IsWhiteSpace(c)) {
+			while (NJson.IsWhiteSpace(c)) {
 				c = data[++x];
 			}
 			switch (c) {
@@ -323,7 +323,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
-					while (char.IsWhiteSpace(data[++x])) { }
+					while (NJson.IsWhiteSpace(data[++x])) { }
 					if (x == len++) {
 						this.Value = data[first..len];
 						this.IsEmpty = true;
@@ -348,7 +348,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
-					while (char.IsWhiteSpace(data[++x])) { }
+					while (NJson.IsWhiteSpace(data[++x])) { }
 					if (x == len++) {
 						this.Value = data[first..len];
 						this.IsEmpty = true;
@@ -549,7 +549,7 @@ namespace NanoJson {
 						break;
 					}
 				}
-				while (char.IsWhiteSpace(this.Value[++x])) { }
+				while (NJson.IsWhiteSpace(this.Value[++x])) { }
 				y = x;
 				while (true) {
 					switch (this.Value[x]) {
@@ -1037,7 +1037,7 @@ namespace NanoJson {
 			int x = 0;
 			int len = knownLen == -1 ? data.Length : knownLen;
 			char c = data[0];
-			while (char.IsWhiteSpace(c)) {
+			while (IsWhiteSpace(c)) {
 				c = data[++x];
 			}
 			this.ReferenceData = reference[x..];
@@ -1078,7 +1078,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 					}
-					while (char.IsWhiteSpace(data[++x])) { }
+					while (IsWhiteSpace(data[++x])) { }
 					if (x == len) {
 						this.InnerValues = NanoArray.Empty;
 						return;
@@ -1135,7 +1135,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 					}
-					while (char.IsWhiteSpace(data[++x])) { }
+					while (IsWhiteSpace(data[++x])) { }
 					if (x == len) {
 						this.InnerValues = NanoArray.Empty;
 						return;
@@ -1491,7 +1491,7 @@ namespace NanoJson {
 						break;
 					}
 				}
-				while (char.IsWhiteSpace(data[++x])) { }
+				while (IsWhiteSpace(data[++x])) { }
 				y = x;
 				innerSize = 1;
 				while (true) {
@@ -2358,6 +2358,20 @@ namespace NanoJson {
 			}
 			else {
 				return new nJson(self.KeyData.Span, self.ReferenceData.Span);
+			}
+		}
+
+		internal static bool IsWhiteSpace(in char character) {
+			switch (character) {
+				case ' ':
+				case '\t':
+				case '\n':
+				case '\r':
+				case '\v':
+				case '\f':
+					return true;
+				default:
+					return false;
 			}
 		}
 
