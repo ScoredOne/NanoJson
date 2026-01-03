@@ -151,7 +151,7 @@ private void Index(string jsonData) {
 ```  
 
 nJson has index support however it should only be used to access a single value from the data, otherwise using the Enumerator is recommended.
-The Enumerator stores the index and read position while directly asking for the index in a nJson object will not be rememebered and will need to start the search from scratch.
+The Enumerator stores the index and read position while directly asking for the index in a nJson object will not be remembered and will need to start the search from scratch.
 For similar functionality with nJson, the Enumerator has been expanded and included a TryGetIndex method.  
 
 ```CS
