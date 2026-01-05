@@ -867,6 +867,14 @@ namespace NanoJson {
 
 			public readonly ReadOnlySpan<NJson> GetSpan => this.Data.AsSpan();
 
+			public readonly string[] ToStringArray() {
+				string[] array = new string[this.Length];
+				for (int x = 0; x < this.Length; x++) {
+					array[x] = this[x].GetStringDecoded;
+				}
+				return array;
+			}
+
 			public ref struct Enumerator {
 				private readonly NanoArray owner;
 				private int index;
@@ -2194,6 +2202,11 @@ namespace NanoJson {
 		/// Get the bool value of This object
 		/// </summary>
 		public readonly bool GetBool => bool.TryParse(this.ReferenceData.Span, out bool value) && value;
+
+		/// <summary>
+		/// Get the inner values of this Object/Array as a string array
+		/// </summary>
+		public readonly string[] ToStringArray => this.InnerValues.ToStringArray();
 
 		/// <summary>
 		/// Try to get the bool value of the object at path
