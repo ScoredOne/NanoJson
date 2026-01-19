@@ -475,14 +475,14 @@ namespace NanoJson {
 			get
 			{
 				if (this.IsEmpty) {
-					throw new IndexOutOfRangeException("Body is Empty");
+					return Empty;
 				}
 				switch (this.Type) {
 					case JsonType.Object:
 						if (this.TryGetKey(key, out nJson v)) {
 							return v;
 						}
-						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
+						return Empty;
 					default:
 						throw new InvalidOperationException();
 				}
@@ -1370,7 +1370,7 @@ namespace NanoJson {
 						if (this.TryGetKey(key, out NJson found)) {
 							return found;
 						}
-						throw new ArgumentException($"Path provided was invalid [{key.ToString()}]", nameof(key));
+						return Empty;
 					default:
 						throw new InvalidOperationException();
 				}
