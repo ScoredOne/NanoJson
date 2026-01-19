@@ -478,6 +478,8 @@ namespace NanoJson {
 					return Empty;
 				}
 				switch (this.Type) {
+					case JsonType.Null:
+						return Empty;
 					case JsonType.Object:
 						if (this.TryGetKey(key, out nJson v)) {
 							return v;
@@ -1366,6 +1368,8 @@ namespace NanoJson {
 			get
 			{
 				switch (this.Type) {
+					case JsonType.Null:
+						return Empty;
 					case JsonType.Object:
 						if (this.TryGetKey(key, out NJson found)) {
 							return found;
