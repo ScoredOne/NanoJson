@@ -1095,6 +1095,7 @@ namespace NanoJson {
 					}
 
 					if (innerLength == -1) {
+						innerLength = 1; // we know there is atleast 1, and increases on ','
 						int debth = 0;
 						x = first;
 
@@ -1152,6 +1153,7 @@ namespace NanoJson {
 					}
 
 					if (innerLength == -1) {
+						innerLength = 1; // we know there is atleast 1, and increases on ','
 						int debth = 0;
 						x = first;
 						while (true) {
