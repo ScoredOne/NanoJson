@@ -1047,7 +1047,7 @@ namespace NanoJson {
 				parsedContents[x] = new NJson(ReadOnlyMemory<char>.Empty, data[x].AsMemory());
 			}
 
-			return parsedContents;
+			return parsedContents.ToJsonArray();
 		}
 
 		public static NJson CreateObject(string key, NJson[] data) {
@@ -2475,9 +2475,6 @@ namespace NanoJson {
 			}
 		}
 
-		public static implicit operator NJson(NJson[] array) {
-			return CreateArray(array);
-		}
 		public static implicit operator NJson[](NJson container) {
 			return container.InnerValues.Clone();
 		}
@@ -2556,6 +2553,15 @@ namespace NanoJson {
 				default:
 					throw new NotSupportedException(typeof(T).Name);
 			}
+		}
+	}
+
+	public static class NJsonExtensions {
+		public static NJson ToJsonObject(this NJson[] objects) {
+			return NJson.CreateObject(objects);
+		}
+		public static NJson ToJsonArray(this NJson[] array) {
+			return NJson.CreateArray(array);
 		}
 	}
 }
