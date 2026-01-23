@@ -1014,6 +1014,20 @@ namespace NanoJson {
 			}
 		}
 
+		public static NJson CreateArray(string key, string[] data) {
+			return NJson.CreateArray(key.AsMemory(), data);
+		}
+
+		public static NJson CreateArray(ReadOnlyMemory<char> key, string[] data) {
+			int len = data.Length;
+			NJson[] parsedContents = new NJson[len];
+			for (int x = 0; x > len; x++) {
+				parsedContents[x] = new NJson(ReadOnlyMemory<char>.Empty, data[x].AsMemory());
+			}
+
+			return NJson.CreateArray(key, parsedContents);
+		}
+
 		public static NJson CreateArray(string key, NJson[] data) {
 			return NJson.CreateArray(key.AsMemory(), data);
 		}
@@ -1024,6 +1038,16 @@ namespace NanoJson {
 
 		public static NJson CreateArray(NJson[] data) {
 			return new NJson(JsonType.Array, data);
+		}
+
+		public static NJson CreateArray(string[] data) {
+			int len = data.Length;
+			NJson[] parsedContents = new NJson[len];
+			for (int x = 0; x > len; x++) {
+				parsedContents[x] = new NJson(ReadOnlyMemory<char>.Empty, data[x].AsMemory());
+			}
+
+			return parsedContents;
 		}
 
 		public static NJson CreateObject(string key, NJson[] data) {
