@@ -1046,6 +1046,14 @@ namespace NanoJson {
 			return new NJson(key, data);
 		}
 
+		public static NJson CreateDateTimeObject(string key, DateTime data) {
+			return NJson.CreateDateTimeObject(key.AsMemory(), data);
+		}
+
+		private static NJson CreateDateTimeObject(ReadOnlyMemory<char> key, DateTime data) {
+			return new NJson(key, data.ToString("o").AsMemory());
+		}
+
 		public static NJson ContainValueInObject(string key, NJson data) {
 			return NJson.ContainValueInObject(key.AsMemory(), data);
 		}
@@ -1740,7 +1748,7 @@ namespace NanoJson {
 					sb[sbPos++] = '"';
 					if (decoded) {
 						char[] buffer = ArrayPool<char>.Shared.Rent(this.ReferenceData.Length);
-						RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
+						NJson.RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
 						for (int x = 0; x < len; x++) {
 							sb[sbPos++] = buffer[x];
 						}
@@ -1999,10 +2007,10 @@ namespace NanoJson {
 							buffer[newLen++] = '\t';
 							break;
 						case 'u': {
-							buffer[newLen++] = (char)((ReadHexNumber(data[++x]) * 4096)
-									+ (ReadHexNumber(data[++x]) * 256)
-									+ (ReadHexNumber(data[++x]) * 16)
-									+ ReadHexNumber(data[++x]));
+							buffer[newLen++] = (char)((NJson.ReadHexNumber(data[++x]) * 4096)
+									+ (NJson.ReadHexNumber(data[++x]) * 256)
+									+ (NJson.ReadHexNumber(data[++x]) * 16)
+									+ NJson.ReadHexNumber(data[++x]));
 							break;
 						}
 					}
@@ -2278,7 +2286,7 @@ namespace NanoJson {
 				DateTime value = DateTime.MinValue;
 				if (JsonType.DateTime.HasFlag(this.Type)) {
 					char[] buffer = ArrayPool<char>.Shared.Rent(this.ReferenceData.Length);
-					RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
+					NJson.RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
 					DateTime.TryParse(buffer.AsSpan(0, len), out value);
 					ArrayPool<char>.Shared.Return(buffer);
 				}
@@ -2441,6 +2449,13 @@ namespace NanoJson {
 			else {
 				return new nJson(self.KeyData.Span, self.ReferenceData.Span);
 			}
+		}
+
+		public static implicit operator NJson(NJson[] array) {
+			return CreateArray(array);
+		}
+		public static implicit operator NJson[](NJson container) {
+			return container.InnerValues.Clone();
 		}
 
 		internal static bool IsWhiteSpace(in char character) {
