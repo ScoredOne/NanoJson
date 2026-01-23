@@ -806,37 +806,87 @@ namespace NanoJson {
 		public bool TryGetBool(ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(key, out nJson value) ? (@out = value.Type == JsonType.Boolean && value.GetBool) : (@out = false);
 
 		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly DateTime GetDateTime
+		{
+			get
+			{
+				DateTime value = DateTime.MinValue;
+				if (JsonType.DateTime.HasFlag(this.Type)) {
+					char[] buffer = ArrayPool<char>.Shared.Rent(this.Value.Length);
+					NJson.RentStringDecodedIntoBuffer(in buffer, this.Value, out int len);
+					DateTime.TryParse(buffer.AsSpan(0, len), out value);
+					ArrayPool<char>.Shared.Return(buffer);
+				}
+				return value;
+			}
+		}
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly DateTime AsDateTime => this.Type == JsonType.String && DateTime.TryParse(this.Value, out DateTime value) ? value : DateTime.MinValue;
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public DateTime TryGetDateTime(string key) => this.TryGetDateTime(key, out DateTime value) ? value : DateTime.MinValue;
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(@key.AsSpan(), out @out);
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public bool TryGetDateTime(ReadOnlySpan<char> key, out DateTime @out) {
+			if (this.TryGetKey(key, out nJson value) && JsonType.DateTime.HasFlag(this.Type)) {
+				@out = value.GetDateTime;
+				return true;
+			}
+			else {
+				@out = DateTime.MinValue;
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Get if This object is Null
 		/// </summary>
 		public readonly bool IsNull => this.Type == JsonType.Null;
 
 	}
 
+	[Serializable, Flags]
 	public enum JsonType {
 		/// <summary>
 		/// <c>null</c>
 		/// </summary>
-		Null,
+		Null = 0,
 		/// <summary>
 		/// <c>NanoJson[]</c>
 		/// </summary>
-		Object,
+		Object = 0x1,
 		/// <summary>
 		/// <c>NanoJson[]</c>
 		/// </summary>
-		Array,
+		Array = 0x2,
 		/// <summary>
 		/// <c>string</c>
 		/// </summary>
-		String,
+		String = 0x4,
 		/// <summary>
 		/// <c>bool</c>
 		/// </summary>
-		Boolean,
+		Boolean = 0x8,
 		/// <summary>
 		/// <c>double</c>
 		/// </summary>
-		Number
+		Number = 0x10,
+
+		DateTime = String | Number,
 	}
 
 	public readonly struct NJson : IEquatable<NJson> {
@@ -1690,7 +1740,7 @@ namespace NanoJson {
 					sb[sbPos++] = '"';
 					if (decoded) {
 						char[] buffer = ArrayPool<char>.Shared.Rent(this.ReferenceData.Length);
-						this.RentStringDecodedIntoBuffer(in buffer, out int len);
+						RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
 						for (int x = 0; x < len; x++) {
 							sb[sbPos++] = buffer[x];
 						}
@@ -1912,12 +1962,16 @@ namespace NanoJson {
 		/// </summary>
 		public readonly string GetStringLiteral => this.ReferenceData.ToString();
 
+		/// <summary>
+		/// Method to take a span of chars and decodes any \u**** characters returning it into the buffer
+		/// </summary>
 		/// <param name="buffer">Designed to take in an array provided by ArrayBuffer</param>
-		private readonly void RentStringDecodedIntoBuffer(in char[] buffer, out int newLen) {
+		/// <param name="data"></param>
+		/// <param name="newLen"></param>
+		public static void RentStringDecodedIntoBuffer(in char[] buffer, ReadOnlySpan<char> data, out int newLen) {
 			int x = 0;
-			int len = this.ReferenceData.Length;
+			int len = data.Length;
 			newLen = 0;
-			ReadOnlySpan<char> data = this.ReferenceData.Span;
 			char c;
 			while (x < len) {
 				c = data[x];
@@ -2131,8 +2185,8 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public readonly bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
-			if (this.TryGetKey(key, out NJson value) && value.Type == JsonType.Number) {
-				return double.TryParse(this.ReferenceData.Span, out @out);
+			if (this.TryGetKey(key, out NJson value)) {
+				return double.TryParse(value.ReferenceData.Span, out @out);
 			}
 			else {
 				@out = double.NaN;
@@ -2173,7 +2227,7 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public readonly bool TryGetNumber<T>(ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			if (this.TryGetKey(key, out NJson value) && value.Type == JsonType.Number) {
+			if (this.TryGetKey(key, out NJson value)) {
 				@out = value.GetNumberOfType<T>();
 				return true;
 			}
@@ -2215,6 +2269,48 @@ namespace NanoJson {
 		public readonly string[] ToStringArray => this.InnerValues.ToStringArray();
 
 		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly DateTime GetDateTime
+		{
+			get
+			{
+				DateTime value = DateTime.MinValue;
+				if (JsonType.DateTime.HasFlag(this.Type)) {
+					char[] buffer = ArrayPool<char>.Shared.Rent(this.ReferenceData.Length);
+					RentStringDecodedIntoBuffer(in buffer, this.ReferenceData.Span, out int len);
+					DateTime.TryParse(buffer.AsSpan(0, len), out value);
+					ArrayPool<char>.Shared.Return(buffer);
+				}
+				return value;
+			}
+		}
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly DateTime TryGetDateTime(string key) => this.TryGetKey(key, out NJson value) ? value.GetDateTime : DateTime.MinValue;
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(key.AsSpan(), out @out);
+
+		/// <summary>
+		/// Gets this value as a System.DateTime using TryParse
+		/// </summary>
+		public readonly bool TryGetDateTime(ReadOnlySpan<char> key, out DateTime @out) {
+			if (this.TryGetKey(key, out NJson value)) {
+				@out = value.GetDateTime;
+				return true;
+			}
+			else {
+				@out = DateTime.MinValue;
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Try to get the bool value of the object at path
 		/// </summary>
 		/// <param name="key"></param>
@@ -2238,50 +2334,17 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the key of This object
 		/// </summary>
-		public readonly string GetKey
-		{
-			get
-			{
-				if (this.KeyData.IsEmpty) {
-					return string.Empty;
-				}
-				else {
-					return this.KeyData.ToString();
-				}
-			}
-		}
+		public readonly string GetKey => this.KeyData.IsEmpty ? string.Empty : this.KeyData.ToString();
 
 		/// <summary>
 		/// Get the key of This object
 		/// </summary>
-		public readonly ReadOnlySpan<char> GetKeyAsSpan
-		{
-			get
-			{
-				if (this.KeyData.IsEmpty) {
-					return ReadOnlySpan<char>.Empty;
-				}
-				else {
-					return this.KeyData.Span;
-				}
-			}
-		}
+		public readonly ReadOnlySpan<char> GetKeyAsSpan => this.KeyData.IsEmpty ? ReadOnlySpan<char>.Empty : this.KeyData.Span;
 
 		/// <summary>
 		/// Get the key of This object
 		/// </summary>
-		public readonly ReadOnlyMemory<char> GetKeyAsMemory
-		{
-			get
-			{
-				if (this.KeyData.IsEmpty) {
-					return ReadOnlyMemory<char>.Empty;
-				}
-				else {
-					return this.KeyData;
-				}
-			}
-		}
+		public readonly ReadOnlyMemory<char> GetKeyAsMemory => this.KeyData.IsEmpty ? ReadOnlyMemory<char>.Empty : this.KeyData;
 
 		/// <summary>
 		/// Compare the key of This object
