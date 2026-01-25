@@ -1022,7 +1022,7 @@ namespace NanoJson {
 			int len = data.Length;
 			NJson[] parsedContents = new NJson[len];
 			for (int x = 0; x > len; x++) {
-				parsedContents[x] = new NJson(ReadOnlyMemory<char>.Empty, data[x].AsMemory());
+				parsedContents[x] = NJson.ParseJson(data[x]);
 			}
 
 			return NJson.CreateArray(key, parsedContents);
@@ -1044,7 +1044,7 @@ namespace NanoJson {
 			int len = data.Length;
 			NJson[] parsedContents = new NJson[len];
 			for (int x = 0; x > len; x++) {
-				parsedContents[x] = new NJson(ReadOnlyMemory<char>.Empty, data[x].AsMemory());
+				parsedContents[x] = NJson.ParseJson(data[x]);
 			}
 
 			return parsedContents.ToJsonArray();
