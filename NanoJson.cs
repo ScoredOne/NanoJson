@@ -1078,11 +1078,23 @@ namespace NanoJson {
 			return new NJson(key, data.ToString("o").AsMemory());
 		}
 
-		public static NJson ContainValueInObject(string key, NJson data) {
-			return NJson.ContainValueInObject(key.AsMemory(), data);
+		/// <summary>
+		/// Take an existing value and assign its values to a new object with a new key
+		/// </summary>
+		/// <param name="key"></param>
+		/// <param name="data"></param>
+		/// <returns></returns>
+		public static NJson AssignKeyToValue(string key, NJson data) {
+			return NJson.AssignKeyToValue(key.AsMemory(), data);
 		}
 
-		private static NJson ContainValueInObject(ReadOnlyMemory<char> key, NJson data) {
+		/// <summary>
+		/// Take an existing value and assign its values to a new object with a new key
+		/// </summary>
+		/// <param name="key"></param>
+		/// <param name="data"></param>
+		/// <returns></returns>
+		private static NJson AssignKeyToValue(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, data);
 		}
 
