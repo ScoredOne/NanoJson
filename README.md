@@ -74,13 +74,13 @@ public static NJson CreateArray(NJson[] data);
 public static NJson CreateObject(string key, NJson[] data); // Add Existing values to a Object
 public static NJson CreateObject(NJson[] data);
 
-public static NJson CreateStringObject(string key, string data);
+public static NJson CreateString(string key, string data);
 
-public static NJson CreateBoolObject(string key, bool data);
+public static NJson CreateBool(string key, bool data);
 
-public static NJson CreateNumberObject(string key, double data);
+public static NJson CreateNumber(string key, double data);
 
-public static NJson ContainValueInObject(string key, NJson data); // To create a new NJson value with a new name
+public static NJson AssignKeyToValue(string key, NJson data); // To create a new NJson value using existing data and a new name
 ```
 Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
 
@@ -216,3 +216,42 @@ private void TryGet(string jsonData) {
     }
 }
 ``` 
+
+### Creating new Json Strings
+
+Using the static methods you can piece together new Json's
+
+```CS
+Console.WriteLine(
+    new NJson[] {
+		NJson.CreateBool("BoolKey", true),
+		NJson.CreateNumber("NumberKey", 84526),
+		NJson.CreateNull("NullKey"),
+		NJson.CreateDateTime("DateTimeKey", DateTime.Now),
+		NJson.CreateString("StringKey", "Test String Words"),
+		NJson.CreateArray("ArrayKey", new NJson[] {
+			NJson.CreateString(null, "Array 1"),
+			NJson.CreateBool(null, true),
+			NJson.CreateDateTime(null, DateTime.MaxValue),
+			NJson.CreateNull(null),
+			NJson.CreateNumber(null, 4892),
+		})
+    }.ToJsonObject().ToString()
+);
+
+Result::
+{
+   "BoolKey": True,
+   "NumberKey": 84526,
+   "NullKey": null,
+   "DateTimeKey": "2026-01-26T00:15:51.7484061+00:00",
+   "StringKey": "Test String Words",
+   "ArrayKey": [
+      "Array 1",
+      True,
+      "9999-12-31T23:59:59.9999999",
+      null,
+      4892
+   ]
+}
+```

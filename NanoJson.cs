@@ -1004,11 +1004,11 @@ namespace NanoJson {
 				case JsonType.Array: // Inner bodies need re-parsing as the originals reference the same allocated memory and we want it to point to a new area
 					return new NJson(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray());
 				case JsonType.String:
-					return NJson.CreateStringObject(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray());
+					return NJson.CreateString(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray());
 				case JsonType.Number:
-					return NJson.CreateNumberObject(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, double.Parse(data.ReferenceData.Span));
+					return NJson.CreateNumber(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, double.Parse(data.ReferenceData.Span));
 				case JsonType.Boolean:
-					return NJson.CreateBoolObject(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, bool.Parse(data.ReferenceData.Span));
+					return NJson.CreateBool(data.KeyData.IsEmpty ? data.KeyData.ToArray() : ReadOnlyMemory<char>.Empty, bool.Parse(data.ReferenceData.Span));
 				default:
 					throw new NotSupportedException();
 			}
@@ -1028,15 +1028,27 @@ namespace NanoJson {
 			return NJson.CreateArray(key, parsedContents);
 		}
 
-		public static NJson CreateArray(string key, NJson[] data) {
+		public static NJson CreateArray(string key, NJson[] data, bool CreateNewContainer = false) {
+			return NJson.CreateArray(key.AsMemory(), CreateNewContainer ? (NJson[])data.Clone() : data);
+		}
+
+		public static NJson CreateArray(string key, NJson data) {
 			return NJson.CreateArray(key.AsMemory(), data);
 		}
 
-		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data) {
+		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data, bool CreateNewContainer = false) {
+			return new NJson(key, JsonType.Array, CreateNewContainer ? (NJson[])data.Clone() : data);
+		}
+
+		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, JsonType.Array, data);
 		}
 
-		public static NJson CreateArray(NJson[] data) {
+		public static NJson CreateArray(NJson[] data, bool CreateNewContainer = false) {
+			return new NJson(JsonType.Array, CreateNewContainer ? (NJson[])data.Clone() : data);
+		}
+
+		public static NJson CreateArray(NJson data) {
 			return new NJson(JsonType.Array, data);
 		}
 
@@ -1050,31 +1062,55 @@ namespace NanoJson {
 			return parsedContents.ToJsonArray();
 		}
 
-		public static NJson CreateObject(string key, NJson[] data) {
+		public static NJson CreateObject(string key, NJson[] data, bool CreateNewContainer = false) {
+			return NJson.CreateObject(key.AsMemory(), data, CreateNewContainer);
+		}
+
+		public static NJson CreateObject(string key, NJson data) {
 			return NJson.CreateObject(key.AsMemory(), data);
 		}
 
-		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data) {
+		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data, bool CreateNewContainer = false) {
+			return new NJson(key, JsonType.Object, CreateNewContainer ? (NJson[])data.Clone() : data);
+		}
+
+		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, JsonType.Object, data);
 		}
 
-		public static NJson CreateObject(NJson[] data) {
+		public static NJson CreateObject(NJson[] data, bool CreateNewContainer = false) {
+			return new NJson(JsonType.Object, CreateNewContainer ? (NJson[])data.Clone() : data);
+		}
+
+		public static NJson CreateObject(NJson data) {
 			return new NJson(JsonType.Object, data);
 		}
 
-		public static NJson CreateStringObject(string key, string data) {
-			return NJson.CreateStringObject(key.AsMemory(), data.AsMemory());
+		public static NJson CreateString(string data) {
+			return NJson.CreateString(data.AsMemory());
 		}
 
-		private static NJson CreateStringObject(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
+		public static NJson CreateString(string key, string data) {
+			return NJson.CreateString(key.AsMemory(), data.AsMemory());
+		}
+
+		private static NJson CreateString(ReadOnlyMemory<char> data) {
+			return NJson.CreateString(ReadOnlyMemory<char>.Empty, data);
+		}
+
+		private static NJson CreateString(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data) {
 			return new NJson(key, data);
 		}
 
-		public static NJson CreateDateTimeObject(string key, DateTime data) {
-			return NJson.CreateDateTimeObject(key.AsMemory(), data);
+		public static NJson CreateDateTime(DateTime data) {
+			return NJson.CreateDateTime(ReadOnlyMemory<char>.Empty, data);
 		}
 
-		private static NJson CreateDateTimeObject(ReadOnlyMemory<char> key, DateTime data) {
+		public static NJson CreateDateTime(string key, DateTime data) {
+			return NJson.CreateDateTime(key.AsMemory(), data);
+		}
+
+		private static NJson CreateDateTime(ReadOnlyMemory<char> key, DateTime data) {
 			return new NJson(key, data.ToString("o").AsMemory());
 		}
 
@@ -1098,27 +1134,39 @@ namespace NanoJson {
 			return new NJson(key, data);
 		}
 
-		public static NJson CreateBoolObject(string key, bool data) {
-			return NJson.CreateBoolObject(key.AsMemory(), data);
+		public static NJson CreateBool(bool data) {
+			return NJson.CreateBool(ReadOnlyMemory<char>.Empty, data);
 		}
 
-		private static NJson CreateBoolObject(ReadOnlyMemory<char> key, bool data) {
+		public static NJson CreateBool(string key, bool data) {
+			return NJson.CreateBool(key.AsMemory(), data);
+		}
+
+		private static NJson CreateBool(ReadOnlyMemory<char> key, bool data) {
 			return new NJson(key, data);
 		}
 
-		public static NJson CreateNumberObject(string key, double data) {
-			return NJson.CreateNumberObject(key.AsMemory(), data);
+		public static NJson CreateNumber(double data) {
+			return NJson.CreateNumber(ReadOnlyMemory<char>.Empty, data);
 		}
 
-		private static NJson CreateNumberObject(ReadOnlyMemory<char> key, double data) {
+		public static NJson CreateNumber(string key, double data) {
+			return NJson.CreateNumber(key.AsMemory(), data);
+		}
+
+		private static NJson CreateNumber(ReadOnlyMemory<char> key, double data) {
 			return new NJson(key, data);
 		}
 
-		public static NJson CreateNullObject(string key) {
-			return NJson.CreateNullObject(key.AsMemory());
+		public static NJson CreateNull() {
+			return NJson.Empty;
 		}
 
-		private static NJson CreateNullObject(ReadOnlyMemory<char> key) {
+		public static NJson CreateNull(string key) {
+			return NJson.CreateNull(key.AsMemory());
+		}
+
+		private static NJson CreateNull(ReadOnlyMemory<char> key) {
 			return new NJson(key);
 		}
 
