@@ -1014,20 +1014,6 @@ namespace NanoJson {
 			}
 		}
 
-		public static NJson CreateArray(string key, string[] data) {
-			return NJson.CreateArray(key.AsMemory(), data);
-		}
-
-		public static NJson CreateArray(ReadOnlyMemory<char> key, string[] data) {
-			int len = data.Length;
-			NJson[] parsedContents = new NJson[len];
-			for (int x = 0; x > len; x++) {
-				parsedContents[x] = NJson.ParseJson(data[x]);
-			}
-
-			return NJson.CreateArray(key, parsedContents);
-		}
-
 		public static NJson CreateArray(string key, NJson[] data, bool CreateNewContainer = false) {
 			return NJson.CreateArray(key.AsMemory(), CreateNewContainer ? (NJson[])data.Clone() : data);
 		}
@@ -1050,16 +1036,6 @@ namespace NanoJson {
 
 		public static NJson CreateArray(NJson data) {
 			return new NJson(JsonType.Array, data);
-		}
-
-		public static NJson CreateArray(string[] data) {
-			int len = data.Length;
-			NJson[] parsedContents = new NJson[len];
-			for (int x = 0; x > len; x++) {
-				parsedContents[x] = NJson.ParseJson(data[x]);
-			}
-
-			return parsedContents.ToJsonArray();
 		}
 
 		public static NJson CreateObject(string key, NJson[] data, bool CreateNewContainer = false) {
@@ -2617,11 +2593,35 @@ namespace NanoJson {
 	}
 
 	public static class NJsonExtensions {
-		public static NJson ToJsonObject(this NJson[] objects) {
-			return NJson.CreateObject(objects);
+		public static NJson ToJsonObject(this NJson[] objects, string key = "") {
+			if (string.IsNullOrWhiteSpace(key)) {
+				return NJson.CreateObject(objects);
+			}
+			else {
+				return NJson.CreateObject(key, objects);
+			}
 		}
-		public static NJson ToJsonArray(this NJson[] array) {
-			return NJson.CreateArray(array);
+
+		public static NJson ToJsonArray(this NJson[] array, string key = "") {
+			if (string.IsNullOrWhiteSpace(key)) {
+				return NJson.CreateArray(array);
+			}
+			else {
+				return NJson.CreateArray(key, array);
+			}
+		}
+
+		public static NJson ToJsonArray(this string[] strings, string key = "") {
+			NJson[] array = new NJson[strings.Length];
+			for (int x = 0; x < strings.Length; x++) {
+				array[x] = NJson.CreateString(strings[x]);
+			}
+			if (string.IsNullOrWhiteSpace(key)) {
+				return NJson.CreateArray(array);
+			}
+			else {
+				return NJson.CreateArray(key, array);
+			}
 		}
 	}
 }
