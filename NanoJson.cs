@@ -741,7 +741,7 @@ namespace NanoJson {
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public double TryGetNumber(ReadOnlySpan<char> key) => this.TryGetKey(key, out nJson value) ? value.GetNumber : double.NaN;
+		public double TryGetNumber(ReadOnlySpan<char> key) => this.TryGetNumber(key, out double value) ? value : double.NaN;
 		/// <summary>
 		/// Try to get the numerical value of the object at path
 		/// </summary>
@@ -749,7 +749,7 @@ namespace NanoJson {
 		/// <returns></returns>
 		public bool TryGetNumber(ReadOnlySpan<char> key, out double @out) {
 			if (this.TryGetKey(key, out nJson value) && value.Type == JsonType.Number) {
-				return double.TryParse(this.Value, out @out);
+				return double.TryParse(value.Value, out @out);
 			}
 			else {
 				@out = double.NaN;
@@ -2235,12 +2235,17 @@ namespace NanoJson {
 		}
 
 		public static int ReadHexNumber(char character) {
-			character = char.ToUpperInvariant(character);
 			if (character < 'A') {
 				return character - '0';
 			}
+			else if (character > '9' && character < 'G') {
+				return 10 + character - 'A';
+			} 
+			else if (character > '`' && character < 'g') {
+				return 10 + character - 'a';
+			} 
 			else {
-				return 10 + (character - 'A');
+				throw new FormatException(nameof(character));
 			}
 		}
 
