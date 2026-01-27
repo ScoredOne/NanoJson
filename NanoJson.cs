@@ -149,6 +149,9 @@ namespace NanoJson {
 											break;
 										case '}':
 											if (--this.debth < 0) { // no comma found, process last segment
+												while (NJson.IsWhiteSpace(this.owner.Value[this.x - 1])) {
+													this.x--;
+												}
 												goto ProcessJsonObject;
 											}
 											break;
@@ -205,6 +208,9 @@ namespace NanoJson {
 											break;
 										case ']':
 											if (--this.debth == 0) {
+												while (NJson.IsWhiteSpace(this.owner.Value[this.x - 1])) {
+													this.x--;
+												}
 												goto ProcessJsonObject;
 											}
 											break;
@@ -577,6 +583,9 @@ namespace NanoJson {
 								break;
 							case '}':
 								if (--debth < 0) { // no comma found, process last segment
+									while (NJson.IsWhiteSpace(this.Value[x - 1])) {
+										x--;
+									}
 									goto ProcessJsonObject;
 								}
 								break;
@@ -1602,6 +1611,9 @@ namespace NanoJson {
 							break;
 						case ']':
 							if (--debth == 0) {
+								while (NJson.IsWhiteSpace(data[x - 1])) {
+									x--;
+								}
 								goto ProcessJsonObject;
 							}
 							break;
@@ -1687,6 +1699,9 @@ namespace NanoJson {
 							break;
 						case '}':
 							if (--debth < 0) { // no comma found, process last segment
+								while (NJson.IsWhiteSpace(data[x - 1])) {
+									x--;
+								}
 								goto ProcessJsonObject;
 							}
 							break;
