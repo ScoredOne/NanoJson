@@ -649,7 +649,8 @@ namespace NanoJson {
 							switch (c) {
 								case '\\':
 								case '/':
-								case '"':
+								case '\'':
+								case '\"':
 									buffer[y++] = c;
 									break;
 								case 'f':
@@ -1729,24 +1730,27 @@ namespace NanoJson {
 		public enum ToStringFormat : byte {
 			None = 0,
 			Pretty = 0x1,
-			Decoded = 0x2,
+			TranslateUnicode = 0x2,
+			LowerCaseBool = 0x4,
 
-			All = Pretty + Decoded,
+			Default = Pretty | TranslateUnicode,
+			All = Pretty | TranslateUnicode | LowerCaseBool,
 		}
 
-		public readonly override string ToString() => this.ToString(ToStringFormat.All);
+		public readonly override string ToString() => this.ToString(ToStringFormat.Default);
 
 		public readonly string ToString(in ToStringFormat format) {
 			int count = 0;
 			bool pretty = format.HasFlag(ToStringFormat.Pretty);
-			bool decoded = format.HasFlag(ToStringFormat.Decoded);
+			bool decoded = format.HasFlag(ToStringFormat.TranslateUnicode);
+			bool lowerBool = format.HasFlag(ToStringFormat.LowerCaseBool);
 			int indent = 0;
 			this.CalculateStringSize(false, in pretty, in decoded, ref count, ref indent);
 
 			char[] buffer = ArrayPool<char>.Shared.Rent(count);
 			indent = 0;
 			int pos = 0;
-			this.ProcessString(false, in pretty, in decoded, ref indent, in buffer, ref pos);
+			this.ProcessString(false, in pretty, in decoded, in lowerBool, ref indent, in buffer, ref pos);
 
 			string builtString = new string(buffer.AsSpan(0, count));
 
@@ -1860,7 +1864,7 @@ namespace NanoJson {
 		/// <param name="pretty"></param>
 		/// <param name="indent"></param>
 		/// <param name="sb"></param>
-		private readonly void ProcessString(bool AsValue, in bool pretty, in bool decoded, ref int indent, in char[] sb, ref int sbPos) {
+		private readonly void ProcessString(bool AsValue, in bool pretty, in bool decoded, in bool lowerBool, ref int indent, in char[] sb, ref int sbPos) {
 			switch (this.Type) {
 				case JsonType.String: {
 					sb[sbPos++] = '"';
@@ -1883,10 +1887,21 @@ namespace NanoJson {
 					break;
 				}
 				case JsonType.Null:
-				case JsonType.Number:
-				case JsonType.Boolean: {
+				case JsonType.Number: {
 					ReadOnlySpan<char> refSpan = this.ReferenceData.Span;
 					for (int x = 0; x < this.ReferenceData.Length; x++) {
+						sb[sbPos++] = refSpan[x];
+					}
+					break;
+				}
+				case JsonType.Boolean: {
+					ReadOnlySpan<char> refSpan = this.ReferenceData.Span;
+					if (lowerBool) {
+						sb[sbPos++] = char.ToLower(refSpan[0]);
+					} else {
+						sb[sbPos++] = refSpan[0];
+					}
+					for (int x = 1; x < this.ReferenceData.Length; x++) {
 						sb[sbPos++] = refSpan[x];
 					}
 					break;
@@ -1937,7 +1952,7 @@ namespace NanoJson {
 							sb[sbPos++] = '"';
 							sb[sbPos++] = ':';
 							sb[sbPos++] = ' ';
-							value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							value.ProcessString(true, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 							sb[sbPos++] = ',';
 							sb[sbPos++] = '\n';
 						}
@@ -1956,7 +1971,7 @@ namespace NanoJson {
 						sb[sbPos++] = '"';
 						sb[sbPos++] = ':';
 						sb[sbPos++] = ' ';
-						value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+						value.ProcessString(true, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 						sb[sbPos++] = '\n';
 
 						indent--;
@@ -1978,7 +1993,7 @@ namespace NanoJson {
 							sb[sbPos++] = '"';
 							sb[sbPos++] = ':';
 							sb[sbPos++] = ' ';
-							value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							value.ProcessString(true, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 							sb[sbPos++] = ',';
 						}
 						value = this.InnerValues[x];
@@ -1991,7 +2006,7 @@ namespace NanoJson {
 						sb[sbPos++] = '"';
 						sb[sbPos++] = ':';
 						sb[sbPos++] = ' ';
-						value.ProcessString(true, in pretty, in decoded, ref indent, in sb, ref sbPos);
+						value.ProcessString(true, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 					}
 
 					sb[sbPos++] = '}';
@@ -2039,7 +2054,7 @@ namespace NanoJson {
 										}
 										break;
 								}
-								value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+								value.ProcessString(false, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 								sb[sbPos++] = ',';
 								sb[sbPos++] = '\n';
 							}
@@ -2056,7 +2071,7 @@ namespace NanoJson {
 									}
 									break;
 							}
-							value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							value.ProcessString(false, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 							sb[sbPos++] = '\n';
 
 							indent--;
@@ -2069,11 +2084,11 @@ namespace NanoJson {
 						else {
 							for (x = 0; x < limit; x++) {
 								value = this.InnerValues[x];
-								value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+								value.ProcessString(false, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 								sb[sbPos++] = ',';
 							}
 							value = this.InnerValues[x];
-							value.ProcessString(false, in pretty, in decoded, ref indent, in sb, ref sbPos);
+							value.ProcessString(false, in pretty, in decoded, in lowerBool, ref indent, in sb, ref sbPos);
 						}
 
 						sb[sbPos++] = ']';
@@ -2106,7 +2121,8 @@ namespace NanoJson {
 					switch (c) {
 						case '\\':
 						case '/':
-						case '"':
+						case '\'':
+						case '\"':
 							buffer[newLen++] = c;
 							break;
 						case 'f':
