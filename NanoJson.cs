@@ -2235,7 +2235,7 @@ namespace NanoJson {
 		}
 
 		public static int ReadHexNumber(char character) {
-			if (character < 'A') {
+			if (character > '/' && character < 'A') {
 				return character - '0';
 			}
 			else if (character > '9' && character < 'G') {
@@ -2564,7 +2564,7 @@ namespace NanoJson {
 		public readonly override bool Equals(object obj) => obj is NJson other && this.Equals(other);
 		public readonly bool Equals(NJson other) {
 			if (this.Type.Equals(other.Type)
-				&& this.InnerValues.Length.Equals(other.InnerValues.Length)
+				&& this.InnerValues.Data.Equals(other.InnerValues.Data)
 				&& this.CompareKey(other.KeyData.Span)
 				&& MemoryExtensions.Equals(this.ReferenceData, other.ReferenceData)) {
 				return true;
