@@ -2235,6 +2235,7 @@ namespace NanoJson {
 		}
 
 		public static int ReadHexNumber(char character) {
+			character = char.ToUpperInvariant(character);
 			if (character < 'A') {
 				return character - '0';
 			}
