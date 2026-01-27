@@ -962,12 +962,45 @@ namespace NanoJson {
 			}
 		}
 
+		public static bool TryParseJson(string key, string data, out NJson parsed) {
+			return NJson.TryParseJson(key.AsMemory(), data.AsMemory(), out parsed);
+		}
+
+		private static bool TryParseJson(ReadOnlyMemory<char> key, ReadOnlyMemory<char> data, out NJson parsed) {
+			try {
+				if (key.IsEmpty) {
+					parsed = NJson.ParseJson(data);
+				}
+				else {
+					parsed = NJson.ParseJson(key, data);
+				}
+				return true;
+			} catch {
+				parsed = Empty;
+				return false;
+			}
+		}
+
 		public static NJson ParseJson(string data) {
 			return NJson.ParseJson(data.AsMemory());
 		}
 
 		private static NJson ParseJson(ReadOnlyMemory<char> data) {
 			return new NJson(ReadOnlyMemory<char>.Empty, data, -1);
+		}
+
+		public static bool TryParseJson(string data, out NJson parsed) {
+			return NJson.TryParseJson(data.AsMemory(), out parsed);
+		}
+
+		private static bool TryParseJson(ReadOnlyMemory<char> data, out NJson parsed) {
+			try {
+				parsed = NJson.ParseJson(data);
+				return true;
+			} catch {
+				parsed = NJson.Empty;
+				return false;
+			}
 		}
 
 		public static NJson Pin(nJson data) {
