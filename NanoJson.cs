@@ -31,7 +31,7 @@ namespace NanoJson {
 			private int index;
 			private int x;
 			private int y;
-			private int debth;
+			private int depth;
 			private int arrayPos;
 
 			internal Enumerator(nJson owner) {
@@ -42,7 +42,7 @@ namespace NanoJson {
 				this.index = -1;
 				this.x = 0;
 				this.y = -1;
-				this.debth = 0;
+				this.depth = 0;
 				this.arrayPos = 0;
 			}
 
@@ -142,13 +142,13 @@ namespace NanoJson {
 											break;
 										case '{':
 										case '[':
-											this.debth++;
+											this.depth++;
 											break;
 										case ']':
-											this.debth--;
+											this.depth--;
 											break;
 										case '}':
-											if (--this.debth < 0) { // no comma found, process last segment
+											if (--this.depth < 0) { // no comma found, process last segment
 												while (NJson.IsWhiteSpace(this.owner.Value[this.x - 1])) {
 													this.x--;
 												}
@@ -156,7 +156,7 @@ namespace NanoJson {
 											}
 											break;
 										case ',':
-											if (this.debth == 0) {
+											if (this.depth == 0) {
 												goto ProcessJsonObject;
 											}
 											break;
@@ -187,7 +187,7 @@ namespace NanoJson {
 								}
 							}
 							this.y = this.x;
-							this.debth = 1;
+							this.depth = 1;
 
 							while (true) {
 								while (true) {
@@ -201,13 +201,13 @@ namespace NanoJson {
 											break;
 										case '[':
 										case '{':
-											this.debth++;
+											this.depth++;
 											break;
 										case '}':
-											this.debth--;
+											this.depth--;
 											break;
 										case ']':
-											if (--this.debth == 0) {
+											if (--this.depth == 0) {
 												while (NJson.IsWhiteSpace(this.owner.Value[this.x - 1])) {
 													this.x--;
 												}
@@ -215,7 +215,7 @@ namespace NanoJson {
 											}
 											break;
 										case ',':
-											if (this.debth == 1) {
+											if (this.depth == 1) {
 												goto ProcessJsonObject;
 											}
 											break;
@@ -252,7 +252,7 @@ namespace NanoJson {
 				this.index = -1;
 				this.x = 0;
 				this.y = -1;
-				this.debth = 0;
+				this.depth = 0;
 				this.arrayPos = 0;
 			}
 		}
@@ -528,7 +528,7 @@ namespace NanoJson {
 				int x = 0;
 				int len = this.Value.Length;
 				int y;
-				int debth = 0;
+				int depth = 0;
 
 				bool found = false;
 
@@ -576,13 +576,13 @@ namespace NanoJson {
 								break;
 							case '{':
 							case '[':
-								debth++;
+								depth++;
 								break;
 							case ']':
-								debth--;
+								depth--;
 								break;
 							case '}':
-								if (--debth < 0) { // no comma found, process last segment
+								if (--depth < 0) { // no comma found, process last segment
 									while (NJson.IsWhiteSpace(this.Value[x - 1])) {
 										x--;
 									}
@@ -590,7 +590,7 @@ namespace NanoJson {
 								}
 								break;
 							case ',':
-								if (debth == 0) {
+								if (depth == 0) {
 									goto ProcessJsonObject;
 								}
 								break;
@@ -1267,7 +1267,7 @@ namespace NanoJson {
 
 					if (innerLength == -1) {
 						innerLength = 1; // we know there is atleast 1, and increases on ','
-						int debth = 0;
+						int depth = 0;
 						x = first;
 
 						while (true) {
@@ -1281,16 +1281,16 @@ namespace NanoJson {
 									break;
 								case '{':
 								case '[':
-									debth++;
+									depth++;
 									break;
 								case '}':
 								case ']':
-									if (--debth == 0) {
+									if (--depth == 0) {
 										goto Fin;
 									}
 									break;
 								case ',':
-									if (debth == 1) {
+									if (depth == 1) {
 										innerLength++;
 									}
 									break;
@@ -1325,7 +1325,7 @@ namespace NanoJson {
 
 					if (innerLength == -1) {
 						innerLength = 1; // we know there is atleast 1, and increases on ','
-						int debth = 0;
+						int depth = 0;
 						x = first;
 						while (true) {
 							switch (data[x]) {
@@ -1338,16 +1338,16 @@ namespace NanoJson {
 									break;
 								case '{':
 								case '[':
-									debth++;
+									depth++;
 									break;
 								case '}':
 								case ']':
-									if (--debth == 0) {
+									if (--depth == 0) {
 										goto Fin;
 									}
 									break;
 								case ',':
-									if (debth == 1) {
+									if (depth == 1) {
 										innerLength++;
 									}
 									break;
@@ -1588,7 +1588,7 @@ namespace NanoJson {
 				}
 			}
 			int y = x;
-			int debth = 1;
+			int depth = 1;
 			int index = 0;
 			int innerSize;
 
@@ -1605,13 +1605,13 @@ namespace NanoJson {
 							break;
 						case '[':
 						case '{':
-							debth++;
+							depth++;
 							break;
 						case '}':
-							debth--;
+							depth--;
 							break;
 						case ']':
-							if (--debth == 0) {
+							if (--depth == 0) {
 								while (NJson.IsWhiteSpace(data[x - 1])) {
 									x--;
 								}
@@ -1619,10 +1619,10 @@ namespace NanoJson {
 							}
 							break;
 						case ',':
-							if (debth == 2) {
+							if (depth == 2) {
 								innerSize++;
 							}
-							else if (debth == 1) {
+							else if (depth == 1) {
 								goto ProcessJsonObject;
 							}
 							break;
@@ -1649,7 +1649,7 @@ namespace NanoJson {
 
 			int x = start;
 			int y;
-			int debth = 0;
+			int depth = 0;
 			int index = 0;
 			int innerSize;
 
@@ -1693,13 +1693,13 @@ namespace NanoJson {
 							break;
 						case '{':
 						case '[':
-							debth++;
+							depth++;
 							break;
 						case ']':
-							debth--;
+							depth--;
 							break;
 						case '}':
-							if (--debth < 0) { // no comma found, process last segment
+							if (--depth < 0) { // no comma found, process last segment
 								while (NJson.IsWhiteSpace(data[x - 1])) {
 									x--;
 								}
@@ -1707,10 +1707,10 @@ namespace NanoJson {
 							}
 							break;
 						case ',':
-							if (debth == 1) {
+							if (depth == 1) {
 								innerSize++;
 							}
-							else if (debth == 0) {
+							else if (depth == 0) {
 								goto ProcessJsonObject;
 							}
 							break;
