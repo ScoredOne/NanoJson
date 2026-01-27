@@ -88,152 +88,157 @@ namespace NanoJson {
 			}
 
 			public bool MoveNext() {
-				switch (this.owner.Type) {
-					case JsonType.Object:
-						if (this.owner.IsEmpty) {
-							return false;
-						}
-						while (++this.y < this.len) {
-							switch (this.owner.Value[this.y]) {
-								case '"':
-									goto go;
-								case '}':
-									return false;
+				try {
+
+					switch (this.owner.Type) {
+						case JsonType.Object:
+							if (this.owner.IsEmpty) {
+								return false;
 							}
-						}
-						if (this.y == this.len) {
-							return false;
-						}
-						go:
-						this.x = this.y;
-						ReadOnlySpan<char> name;
-						while (true) {
-							if (this.owner.Value[++this.x] == '"') {
-								name = ReadOnlySpan<char>.Empty;
+							while (++this.y < this.len) {
+								switch (this.owner.Value[this.y]) {
+									case '"':
+										goto go;
+									case '}':
+										return false;
+								}
 							}
-							else {
-								this.y = this.x;
+							if (this.y == this.len) {
+								return false;
+							}
+							go:
+							this.x = this.y;
+							ReadOnlySpan<char> name;
+							while (true) {
+								if (this.owner.Value[++this.x] == '"') {
+									name = ReadOnlySpan<char>.Empty;
+								}
+								else {
+									this.y = this.x;
+									while (true) {
+										if (this.owner.Value[++this.x] == '"') {
+											break;
+										}
+									}
+									name = this.owner.Value[this.y..this.x];
+								}
+
 								while (true) {
-									if (this.owner.Value[++this.x] == '"') {
+									if (this.owner.Value[++this.x] == ':') {
 										break;
 									}
 								}
-								name = this.owner.Value[this.y..this.x];
-							}
-
-							while (true) {
-								if (this.owner.Value[++this.x] == ':') {
-									break;
-								}
-							}
-							while (NJson.IsWhiteSpace(this.owner.Value[++this.x])) { }
-							this.y = this.x;
-							this.index++;
-							while (true) {
-								switch (this.owner.Value[this.x]) {
-									case '"':
-										while (true) {
-											if (this.owner.Value[++this.x] == '"') {
-												break;
-											}
-										}
-										break;
-									case '{':
-									case '[':
-										this.debth++;
-										break;
-									case ']':
-										this.debth--;
-										break;
-									case '}':
-										if (--this.debth < 0) { // no comma found, process last segment
-											goto ProcessJsonObject;
-										}
-										break;
-									case ',':
-										if (this.debth == 0) {
-											goto ProcessJsonObject;
-										}
-										break;
-								}
-								this.x++;
-							}
-
-							ProcessJsonObject:
-							if (!name.IsEmpty) {
-								this.current = new nJson(name, this.owner.Value[this.y..this.x]);
+								while (NJson.IsWhiteSpace(this.owner.Value[++this.x])) { }
 								this.y = this.x;
-								return true;
-							}
-							else if (++this.x == this.len) {
-								return false;
-							}
-						}
-					case JsonType.Array:
-						if (this.owner.IsEmpty) {
-							return false;
-						}
-						this.index++;
-						if (this.y == -1) {
-							while (true) {
-								if (this.owner.Value[this.x++] == '[') {
-									break;
-								}
-							}
-						}
-						this.y = this.x;
-						this.debth = 1;
-
-						while (true) {
-							while (true) {
-								switch (this.owner.Value[this.x]) {
-									case '"':
-										while (true) {
-											if (this.owner.Value[++this.x] == '"') {
-												break;
+								this.index++;
+								while (true) {
+									switch (this.owner.Value[this.x]) {
+										case '"':
+											while (true) {
+												if (this.owner.Value[++this.x] == '"') {
+													break;
+												}
 											}
-										}
-										break;
-									case '[':
-									case '{':
-										this.debth++;
-										break;
-									case '}':
-										this.debth--;
-										break;
-									case ']':
-										if (--this.debth == 0) {
-											goto ProcessJsonObject;
-										}
-										break;
-									case ',':
-										if (this.debth == 1) {
-											goto ProcessJsonObject;
-										}
-										break;
+											break;
+										case '{':
+										case '[':
+											this.debth++;
+											break;
+										case ']':
+											this.debth--;
+											break;
+										case '}':
+											if (--this.debth < 0) { // no comma found, process last segment
+												goto ProcessJsonObject;
+											}
+											break;
+										case ',':
+											if (this.debth == 0) {
+												goto ProcessJsonObject;
+											}
+											break;
+									}
+									this.x++;
 								}
-								this.x++;
-							}
 
-							ProcessJsonObject:
-							if (this.arrayPos == this.index) {
-								this.current = new nJson(this.owner.Value[this.y..this.x]);
-								return true;
-							}
-							else {
-								if (++this.x == this.len) {
+								ProcessJsonObject:
+								if (!name.IsEmpty) {
+									this.current = new nJson(name, this.owner.Value[this.y..this.x]);
+									this.y = this.x;
+									return true;
+								}
+								else if (++this.x == this.len) {
 									return false;
 								}
-								this.y = this.x;
-								this.arrayPos++;
 							}
-						}
-					default:
-						if (this.index == -1) {
-							this.index = 0;
-							return true;
-						}
-						return false;
+						case JsonType.Array:
+							if (this.owner.IsEmpty) {
+								return false;
+							}
+							this.index++;
+							if (this.y == -1) {
+								while (true) {
+									if (this.owner.Value[this.x++] == '[') {
+										break;
+									}
+								}
+							}
+							this.y = this.x;
+							this.debth = 1;
+
+							while (true) {
+								while (true) {
+									switch (this.owner.Value[this.x]) {
+										case '"':
+											while (true) {
+												if (this.owner.Value[++this.x] == '"') {
+													break;
+												}
+											}
+											break;
+										case '[':
+										case '{':
+											this.debth++;
+											break;
+										case '}':
+											this.debth--;
+											break;
+										case ']':
+											if (--this.debth == 0) {
+												goto ProcessJsonObject;
+											}
+											break;
+										case ',':
+											if (this.debth == 1) {
+												goto ProcessJsonObject;
+											}
+											break;
+									}
+									this.x++;
+								}
+
+								ProcessJsonObject:
+								if (this.arrayPos == this.index) {
+									this.current = new nJson(this.owner.Value[this.y..this.x]);
+									return true;
+								}
+								else {
+									if (++this.x == this.len) {
+										return false;
+									}
+									this.y = this.x;
+									this.arrayPos++;
+								}
+							}
+						default:
+							if (this.index == -1) {
+								this.index = 0;
+								return true;
+							}
+							return false;
+					}
+				} catch {
+					return false;
 				}
 			}
 
@@ -506,100 +511,105 @@ namespace NanoJson {
 		}
 
 		public bool TryGetKey(ReadOnlySpan<char> key, out nJson value) {
-			if (this.Type != JsonType.Object) {
-				value = nJson.Empty;
-				return false;
-			}
-			int pathLen = key.Length;
-			int nameLen = -1;
-
-			int x = 0;
-			int len = this.Value.Length;
-			int y;
-			int debth = 0;
-
-			bool found = false;
-
-			while (true) {
-				while (true) {
-					if (this.Value[x] == '"') {
-						break;
-					}
-					x++;
-				}
-				ReadOnlySpan<char> name;
-				if (this.Value[++x] == '"') {
-					name = ReadOnlySpan<char>.Empty;
-				}
-				else {
-					y = x;
-					while (true) {
-						if (this.Value[++x] == '"') {
-							break;
-						}
-					}
-					name = this.Value[y..x];
-				}
-
-				if (key.StartsWith(name)) {
-					nameLen = name.Length;
-					found = true;
-				}
-
-				while (true) {
-					if (this.Value[++x] == ':') {
-						break;
-					}
-				}
-				while (NJson.IsWhiteSpace(this.Value[++x])) { }
-				y = x;
-				while (true) {
-					switch (this.Value[x]) {
-						case '"':
-							while (true) {
-								if (this.Value[++x] == '"') {
-									break;
-								}
-							}
-							break;
-						case '{':
-						case '[':
-							debth++;
-							break;
-						case ']':
-							debth--;
-							break;
-						case '}':
-							if (--debth < 0) { // no comma found, process last segment
-								goto ProcessJsonObject;
-							}
-							break;
-						case ',':
-							if (debth == 0) {
-								goto ProcessJsonObject;
-							}
-							break;
-					}
-					x++;
-				}
-
-				ProcessJsonObject:
-				if (found) {
-					if (nameLen == pathLen) {
-						value = new nJson(this.Value[y..x]);
-						return true;
-					}
-					else {
-						if (new nJson(this.Value[y..x]).TryGetKey(key[++nameLen..], out value)) {
-							return true;
-						}
-						return false;
-					}
-				}
-				else if (x == len) {
+			try {
+				if (this.Type != JsonType.Object) {
 					value = nJson.Empty;
 					return false;
 				}
+				int pathLen = key.Length;
+				int nameLen = -1;
+
+				int x = 0;
+				int len = this.Value.Length;
+				int y;
+				int debth = 0;
+
+				bool found = false;
+
+				while (true) {
+					while (true) {
+						if (this.Value[x] == '"') {
+							break;
+						}
+						x++;
+					}
+					ReadOnlySpan<char> name;
+					if (this.Value[++x] == '"') {
+						name = ReadOnlySpan<char>.Empty;
+					}
+					else {
+						y = x;
+						while (true) {
+							if (this.Value[++x] == '"') {
+								break;
+							}
+						}
+						name = this.Value[y..x];
+					}
+
+					if (key.StartsWith(name)) {
+						nameLen = name.Length;
+						found = true;
+					}
+
+					while (true) {
+						if (this.Value[++x] == ':') {
+							break;
+						}
+					}
+					while (NJson.IsWhiteSpace(this.Value[++x])) { }
+					y = x;
+					while (true) {
+						switch (this.Value[x]) {
+							case '"':
+								while (true) {
+									if (this.Value[++x] == '"') {
+										break;
+									}
+								}
+								break;
+							case '{':
+							case '[':
+								debth++;
+								break;
+							case ']':
+								debth--;
+								break;
+							case '}':
+								if (--debth < 0) { // no comma found, process last segment
+									goto ProcessJsonObject;
+								}
+								break;
+							case ',':
+								if (debth == 0) {
+									goto ProcessJsonObject;
+								}
+								break;
+						}
+						x++;
+					}
+
+					ProcessJsonObject:
+					if (found) {
+						if (nameLen == pathLen) {
+							value = new nJson(this.Value[y..x]);
+							return true;
+						}
+						else {
+							if (new nJson(this.Value[y..x]).TryGetKey(key[++nameLen..], out value)) {
+								return true;
+							}
+							return false;
+						}
+					}
+					else if (x == len) {
+						value = nJson.Empty;
+						return false;
+					}
+				}
+			} catch {
+				value = nJson.Empty;
+				return false;
 			}
 		}
 
