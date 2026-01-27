@@ -1733,11 +1733,15 @@ namespace NanoJson {
 			TranslateUnicode = 0x2,
 			LowerCaseBool = 0x4,
 
-			Default = Pretty | TranslateUnicode,
 			All = Pretty | TranslateUnicode | LowerCaseBool,
 		}
 
-		public readonly override string ToString() => this.ToString(ToStringFormat.Default);
+		/// <summary>
+		/// Format used by the basic <c>.ToString()</c>
+		/// </summary>
+		public static ToStringFormat Default_ToStringFormat = ToStringFormat.Pretty | ToStringFormat.TranslateUnicode;
+
+		public readonly override string ToString() => this.ToString(Default_ToStringFormat);
 
 		public readonly string ToString(in ToStringFormat format) {
 			int count = 0;
