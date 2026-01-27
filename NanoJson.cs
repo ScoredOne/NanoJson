@@ -2101,7 +2101,7 @@ namespace NanoJson {
 			char c;
 			while (x < len) {
 				c = data[x];
-				if (c == '"') {
+				if (c == '\\') {
 					c = data[++x];
 					switch (c) {
 						case '\\':
