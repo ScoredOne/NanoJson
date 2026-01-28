@@ -2166,7 +2166,7 @@ namespace NanoJson {
 			int len = this.ReferenceData.Length;
 			ReadOnlySpan<char> data = this.ReferenceData.Span;
 			while (x < len) {
-				if (data[x] == '\\' && data[++x] == 'u') {
+				if (data[x] == '\\' && ++x < len && data[x] == 'u') {
 					x += 4;
 				}
 				count++;
