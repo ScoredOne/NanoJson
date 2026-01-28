@@ -68,6 +68,9 @@ Object type can also be accessed via key search. Furthermore, you can include a 
 public static NJson ParseJson(string key, string data); // Translate string data into NJson
 public static NJson ParseJson(string data);
 
+public static bool TryParseJson(string key, string data, out NJson parsed);
+public static bool TryParseJson(string data, out NJson parsed);
+
 public static NJson CreateArray(string key, NJson[] data); // Add Existing values to a Array
 public static NJson CreateArray(NJson[] data);
 
@@ -75,14 +78,20 @@ public static NJson CreateObject(string key, NJson[] data); // Add Existing valu
 public static NJson CreateObject(NJson[] data);
 
 public static NJson CreateString(string key, string data);
+public static NJson CreateString(string data);
 
 public static NJson CreateBool(string key, bool data);
+public static NJson CreateBool(bool data);
 
 public static NJson CreateNumber(string key, double data);
+public static NJson CreateNumber(double data);
 
 public static NJson AssignKeyToValue(string key, NJson data); // To create a new NJson value using existing data and a new name
 ```
 Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
+
+# NJson arrays
+NJson objects and arrays are built using standard arrays, create the objects you want into the container
 
 ## nJson
 The absolute smallest, parse on demand Json.  
@@ -185,9 +194,9 @@ An enum is also provided for additional settings. Using ToStringFormat you can c
 ```CS
 private void GetString(string jsonData) {
     NJson NanoJ = NJson.ParseJson(jsonData);
-    string jsonString = NanoJ.ToString(ToStringFormat.Pretty | ToStringFormat.Decoded);
+    string jsonString = NanoJ.ToString(ToStringFormat.Pretty | ToStringFormat.TranslateUnicode);
 
-    // NanoJ.ToString() == NanoJ.ToString(ToStringFormat.All)
+    // NanoJ.ToString() == NanoJ.ToString(NJson.Default_ToStringFormat)
 }
 ```  
 Because of nJson's on demand nature, ToString functionality is not currently available, it will need to be pinned to extract it. (Future feature consideration)  

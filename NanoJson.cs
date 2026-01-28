@@ -1067,48 +1067,48 @@ namespace NanoJson {
 			}
 		}
 
-		public static NJson CreateArray(string key, NJson[] data, bool CreateNewContainer = false) {
-			return NJson.CreateArray(key.AsMemory(), CreateNewContainer ? (NJson[])data.Clone() : data);
+		public static NJson CreateArray(string key, NJson[] data, bool AllocateNewContainer = false) {
+			return NJson.CreateArray(key.AsMemory(), AllocateNewContainer ? (NJson[])data.Clone() : data);
 		}
 
 		public static NJson CreateArray(string key, NJson data) {
 			return NJson.CreateArray(key.AsMemory(), data);
 		}
 
-		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data, bool CreateNewContainer = false) {
-			return new NJson(key, JsonType.Array, CreateNewContainer ? (NJson[])data.Clone() : data);
+		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson[] data, bool AllocateNewContainer = false) {
+			return new NJson(key, JsonType.Array, AllocateNewContainer ? (NJson[])data.Clone() : data);
 		}
 
 		private static NJson CreateArray(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, JsonType.Array, data);
 		}
 
-		public static NJson CreateArray(NJson[] data, bool CreateNewContainer = false) {
-			return new NJson(JsonType.Array, CreateNewContainer ? (NJson[])data.Clone() : data);
+		public static NJson CreateArray(NJson[] data, bool AllocateNewContainer = false) {
+			return new NJson(JsonType.Array, AllocateNewContainer ? (NJson[])data.Clone() : data);
 		}
 
 		public static NJson CreateArray(NJson data) {
 			return new NJson(JsonType.Array, data);
 		}
 
-		public static NJson CreateObject(string key, NJson[] data, bool CreateNewContainer = false) {
-			return NJson.CreateObject(key.AsMemory(), data, CreateNewContainer);
+		public static NJson CreateObject(string key, NJson[] data, bool AllocateNewContainer = false) {
+			return NJson.CreateObject(key.AsMemory(), data, AllocateNewContainer);
 		}
 
 		public static NJson CreateObject(string key, NJson data) {
 			return NJson.CreateObject(key.AsMemory(), data);
 		}
 
-		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data, bool CreateNewContainer = false) {
-			return new NJson(key, JsonType.Object, CreateNewContainer ? (NJson[])data.Clone() : data);
+		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson[] data, bool AllocateNewContainer = false) {
+			return new NJson(key, JsonType.Object, AllocateNewContainer ? (NJson[])data.Clone() : data);
 		}
 
 		private static NJson CreateObject(ReadOnlyMemory<char> key, NJson data) {
 			return new NJson(key, JsonType.Object, data);
 		}
 
-		public static NJson CreateObject(NJson[] data, bool CreateNewContainer = false) {
-			return new NJson(JsonType.Object, CreateNewContainer ? (NJson[])data.Clone() : data);
+		public static NJson CreateObject(NJson[] data, bool AllocateNewContainer = false) {
+			return new NJson(JsonType.Object, AllocateNewContainer ? (NJson[])data.Clone() : data);
 		}
 
 		public static NJson CreateObject(NJson data) {
