@@ -1518,6 +1518,7 @@ namespace NanoJson {
 					bool dec = false;
 					bool E = false;
 
+					this.ReferenceData = reference[x..len];
 					while (++x < len) {
 						c = data[x];
 						if (c == '.') {
@@ -1539,7 +1540,6 @@ namespace NanoJson {
 							throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 						}
 					}
-					this.ReferenceData = reference[x..len];
 
 					return;
 				}
