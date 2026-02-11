@@ -1163,7 +1163,7 @@ namespace NanoJson {
 						this.ReferenceData = ReadOnlyMemory<char>.Empty;
 					}
 					else {
-						this.ReferenceData = reference.Slice(1, len - 1);
+						this.ReferenceData = trimmedRef.Slice(1, len - 1);
 					}
 					return;
 				}
@@ -1646,6 +1646,7 @@ namespace NanoJson {
 			TranslateUnicode = 0x2,
 			LowerCaseBool = 0x4,
 
+			Default = Pretty | TranslateUnicode,
 			All = Pretty | TranslateUnicode | LowerCaseBool,
 		}
 
