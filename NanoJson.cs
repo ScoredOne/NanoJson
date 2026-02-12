@@ -886,10 +886,16 @@ namespace NanoJson {
 		}
 
 		private static NJson ParseJson(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> data) {
-			if (key.IsEmpty) {
+			if (key.Span.Trim().IsEmpty) {
+				if (data.Span.Trim().IsEmpty) {
+					return NJson.Empty;
+				}
 				return NJson.ParseJson(in data);
 			}
 			else {
+				if (data.Span.Trim().IsEmpty) {
+					return NJson.CreateNull(key);
+				}
 				return new NJson(in key, in data, -1);
 			}
 		}
@@ -906,6 +912,9 @@ namespace NanoJson {
 				else {
 					parsed = NJson.ParseJson(in key, in data);
 				}
+				if (parsed.Type == JsonType.Null) {
+					return false;
+				}
 				return true;
 			} catch {
 				parsed = NJson.Empty;
@@ -918,6 +927,9 @@ namespace NanoJson {
 		}
 
 		private static NJson ParseJson(in ReadOnlyMemory<char> data) {
+			if (data.Span.Trim().IsEmpty) {
+				return NJson.Empty;
+			}
 			return new NJson(ReadOnlyMemory<char>.Empty, in data, -1);
 		}
 
@@ -928,6 +940,9 @@ namespace NanoJson {
 		private static bool TryParseJson(in ReadOnlyMemory<char> data, out NJson parsed) {
 			try {
 				parsed = NJson.ParseJson(in data);
+				if (parsed.Type == JsonType.Null) {
+					return false;
+				}
 				return true;
 			} catch {
 				parsed = NJson.Empty;
