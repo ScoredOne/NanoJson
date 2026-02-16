@@ -2443,7 +2443,7 @@ namespace NanoJson {
 
 	#region ### MemoryJsonExtensions ###
 
-	public static class MemoryJsonExtensions {
+	public static class NanoJsonExtensions {
 		public static JsonMemory ToJsonObject(this JsonMemory[] objects, string key = "") {
 			if (string.IsNullOrWhiteSpace(key)) {
 				return JsonMemory.CreateObject(objects);
