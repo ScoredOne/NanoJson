@@ -26,29 +26,29 @@ Job=.NET 9.0  Runtime=.NET 9.0
 |------------------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
 | NanoJson_JsonSpan*       | JustParse          |      33.57 ns |     0.028 ns |     0.025 ns |       - |       - |       - |         - |
 | NanoJson_JsonMemory      | JustParse          | 241,214.67 ns | 1,626.939 ns | 1,442.239 ns |  4.3945 |  0.4883 |       - |   74928 B |
-| SystemTextJson           | JustParse          | 135,288.05 ns |   156.955 ns |   131.064 ns |  5.6152 |  0.4883 |       - |   95696 B |
+| System.Text.Json         | JustParse          | 135,288.05 ns |   156.955 ns |   131.064 ns |  5.6152 |  0.4883 |       - |   95696 B |
 | LightJson                | JustParse          | 338,335.19 ns | 1,570.335 ns | 1,468.892 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson           | JustParse          | 504,082.22 ns | 2,872.296 ns | 2,398.497 ns | 36.1328 | 25.3906 |       - |  618136 B |
 |                          |                    |               |              |              |         |         |         |           |
-| NanoJson_JsonSpan*       | ParseToString      |  82,125.50 ns |   308.110 ns |   273.131 ns | 35.6445 | 35.6445 | 35.6445 |  114140 B |
+| NanoJson_JsonSpan        | ParseToString      | 494,223.63 ns | 2,135.551 ns | 1,997.596 ns | 30.2734 | 30.2734 | 30.2734 |   95674 B |
 | NanoJson_JsonMemory      | ParseToString      | 386,639.30 ns | 2,341.740 ns | 2,075.891 ns | 30.2734 | 30.2734 | 30.2734 |  170588 B |
-| SystemTextJson           | ParseToString      | 256,067.47 ns | 1,815.913 ns | 1,609.759 ns | 27.3438 | 27.3438 | 27.3438 |  183708 B |
+| System.Text.Json         | ParseToString      | 256,067.47 ns | 1,815.913 ns | 1,609.759 ns | 27.3438 | 27.3438 | 27.3438 |  183708 B |
 | LightJson                | ParseToString      | 500,614.54 ns | 3,644.779 ns | 3,409.328 ns | 41.9922 | 20.5078 |       - |  714936 B |
 | NewtonsoftJson           | ParseToString      | 636,750.81 ns | 2,468.194 ns | 2,308.750 ns | 54.6875 | 53.7109 | 27.3438 |  804049 B |
 |                          |                    |               |              |              |         |         |         |           |
 | NanoJson_JsonSpan**      | ParseReformat      | 440,311.67 ns | 1,899.435 ns | 1,683.800 ns |  5.8594 |  0.4883 |       - |  105744 B |
 | NanoJson_JsonMemory      | ParseReformat      | 323,021.04 ns | 6,389.027 ns | 6,274.879 ns |  9.7656 |  1.9531 |       - |  166680 B |
-| SystemTextJson           | ParseReformat      | 313,285.68 ns | 2,553.895 ns | 2,132.618 ns | 23.4375 |  9.7656 |       - |  415664 B |
+| System.Text.Json         | ParseReformat      | 313,285.68 ns | 2,553.895 ns | 2,132.618 ns | 23.4375 |  9.7656 |       - |  415664 B |
 | LightJson                | ParseReformat      | 453,900.13 ns | 3,647.930 ns | 3,046.186 ns | 42.9688 | 18.0664 |       - |  725168 B |
 | NewtonsoftJson           | ParseReformat      | 632,137.40 ns | 6,303.847 ns | 5,896.622 ns | 54.6875 | 26.3672 |       - |  930152 B |
 |                          |                    |               |              |              |         |         |         |           |
 | NanoJson_JsonSpan        | ParseToSingleValue |  40,851.67 ns |   138.109 ns |   129.187 ns |       - |       - |       - |      56 B |
 | NanoJson_JsonMemory      | ParseToSingleValue | 224,043.80 ns | 4,447.696 ns | 4,758.985 ns |  4.3945 |  0.4883 |       - |   74984 B |
-| SystemTextJson           | ParseToSingleValue | 137,499.61 ns |   411.618 ns |   343.719 ns |  5.8594 |  0.9766 |       - |   99968 B |
+| System.Text.Json         | ParseToSingleValue | 137,499.61 ns |   411.618 ns |   343.719 ns |  5.8594 |  0.9766 |       - |   99968 B |
 | LightJson                | ParseToSingleValue | 334,460.62 ns | 1,935.745 ns | 1,810.697 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson           | ParseToSingleValue | 460,828.79 ns | 4,095.251 ns | 3,830.700 ns | 36.6211 | 26.3672 |       - |  618136 B |
 
-*JsonSpan doesnt parse on data insersion and doesnt read the entire contents to build an approprate string
+*JsonSpan doesnt parse on data insersion. Hence the results of JustParse.
 **JsonSpan as it cant store store the nodes, parses and reads the nodes as JsonSpan then pins them to memory as JsonMemory before running ToString
 
 Test format:  
@@ -116,12 +116,12 @@ Both JsonMemory and JsonSpan support foreach iteration with a custom Enumerator,
 Both Array and Objects can be looped or indexed to aquire its inner values. As a dictionary isnt used, larger scoped Objects will be slower to access than traditional hash code methods but on small scale objects the speed is negligable.    
 ```CS
 private void Foreach(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    JsonSpan nJ = new JsonSpan(jsonData);
-    foreach (JsonMemory nano in NanoJ) {
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    JsonSpan JSpan = new JsonSpan(jsonData);
+    foreach (JsonMemory nano in JMemory) {
         ...
     }
-    foreach (JsonSpan n in nJ) {
+    foreach (JsonSpan n in JSpan) {
         ...
     }
 }
@@ -133,16 +133,16 @@ Both JsonMemory and JsonSpan support key searching and key path searching for Js
 
 ```CS
 private void Key(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    JsonSpan nJ = new JsonSpan(jsonData);
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    JsonSpan JSpan = new JsonSpan(jsonData);
 
-    JsonMemory NanoJValue1 = NanoJ["name"];
-    JsonMemory NanoJValue2 = NanoJ["name.name.value"]; // The same as NanoJ["name"]["name"]["value"]
-    JsonMemory NanoJValue3 = NanoJ["name.name"][2]["value"]; // The same as NanoJ["name"]["name"][2]["value"]
+    JsonMemory JMemoryValue1 = JMemory["name"];
+    JsonMemory JMemoryValue2 = JMemory["name.name.value"]; // The same as JMemory["name"]["name"]["value"]
+    JsonMemory JMemoryValue3 = JMemory["name.name"][2]["value"]; // The same as JMemory["name"]["name"][2]["value"]
 
-    JsonSpan nJValue1 = nJ["name"];
-    JsonSpan nJValue2 = nJ["name.name.value"]; // The same as nJ["name"]["name"]["value"]
-    JsonSpan nJValue3 = nJ["name.name"][2]["value"]; // The same as nJ["name"]["name"][2]["value"]
+    JsonSpan JSpanValue1 = JSpan["name"];
+    JsonSpan JSpanValue2 = JSpan["name.name.value"]; // The same as JSpan["name"]["name"]["value"]
+    JsonSpan JSpanValue3 = JSpan["name.name"][2]["value"]; // The same as JSpan["name"]["name"][2]["value"]
 }
 ``` 
 
@@ -152,11 +152,11 @@ JsonMemory as it uses arrays allows indexing support, this means index support i
 
 ```CS
 private void Index(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    JsonMemory NJ = Nanoj[0];
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    JsonMemory JSpan = JMemory[0];
 
-    JsonSpan nJ = new JsonSpan(jsonData);
-    JsonSpan nJIndex = nJ[0];
+    JsonSpan JSpan = new JsonSpan(jsonData);
+    JsonSpan JSpanIndex = JSpan[0];
 }
 ```  
 
@@ -166,12 +166,12 @@ For similar functionality with JsonSpan, the Enumerator has been expanded and in
 
 ```CS
 private void Index(string jsonData) {
-    JsonSpan nJ = new JsonSpan(jsonData);
-    JsonSpan.Enumerator nJ_Enum = nJ.GetEnumerator();
-    if (nJ_Enum.TryGetIndex(2, out JsonSpan nJ2)) {
+    JsonSpan JSpan = new JsonSpan(jsonData);
+    JsonSpan.Enumerator JSpan_Enum = JSpan.GetEnumerator();
+    if (JSpan_Enum.TryGetIndex(2, out JsonSpan JSpan2)) {
         ...
     }
-    // From here, nJ_Enum is at index 2, going backwards calls Reset() internally, going forward continues where it left off at 2
+    // From here, JSpan_Enum is at index 2, going backwards calls Reset() internally, going forward continues where it left off at 2
 }
 ```  
 
@@ -181,26 +181,24 @@ No arrays are used in JsonSpan so compromises must be made and the indexer was o
 
 ### ToString
 
-As JsonMemory is a constructed format, ToString has been implemented to provide the current structure as a String.  
-(Although sounding simple, remember no additional allocation)  
+ToString has been implemented to provide the current structure of JsonMemory or JsonSpan as a String.
 The body and sub values are evaluated to determine the character total required, rents the space and writes to it. Then gives the result to new String to create the output.  
 Resulting in a body direct to string implimentation, no streams or string builders.  
 ```CS
 private void GetString(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    string jsonString = NanoJ.ToString();
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    string jsonString = JMemory.ToString();
 }
 ```  
 An enum is also provided for additional settings. Using ToStringFormat you can combine options for ToString.  
 ```CS
 private void GetString(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    string jsonString = NanoJ.ToString(ToStringFormat.Pretty | ToStringFormat.TranslateUnicode);
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    string jsonString = JMemory.ToString(ToStringFormat.Pretty | ToStringFormat.TranslateUnicode);
 
-    // NanoJ.ToString() == NanoJ.ToString(JsonMemory.Default_ToStringFormat)
+    // JMemory.ToString() == JMemory.ToString(JsonMemory.Default_ToStringFormat)
 }
 ```  
-Because of JsonSpan's on demand nature, ToString functionality is not currently available, it will need to be pinned to extract it. (Future feature consideration)  
 
 ### TryGet*
 
@@ -210,16 +208,16 @@ Provide the key just like the indexer.
 
 ```CS
 private void TryGet(string jsonData) {
-    JsonMemory NanoJ = JsonMemory.ParseJson(jsonData);
-    JsonSpan nJ = new JsonSpan(jsonData);
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    JsonSpan JSpan = new JsonSpan(jsonData);
 
-    if (NanoJ.TryGetKey("name.name.value", out JsonMemory value)) {
+    if (JMemory.TryGetKey("name.name.value", out JsonMemory value)) {
         ...
     } else {
         ... // value == JsonMemory.Empty
     }
 
-    if (nJ.TryGetKey("name.name.value", out JsonSpan value)) {
+    if (JSpan.TryGetKey("name.name.value", out JsonSpan value)) {
         ...
     } else {
         ... // value == JsonSpan.Empty
@@ -265,3 +263,40 @@ Result::
    ]
 }
 ```
+
+### Extensions
+
+JsonMemory Arrays have a couple of extensions provided to quickly contain the contenteds within either an Object or Array.
+An optional key can be provided, so it works the same as if calling the equivolvent static method.
+
+```CS
+private JsonMemory ArrayToObject() {
+    return new JsonMemory[] {
+        JsonMemory.CreateString("Item1", "Content One"),
+        JsonMemory.CreateString("Item2", "Content Two"),
+        JsonMemory.CreateString("Item3", "Content Three"),
+    }.ToJsonObject();
+}
+
+Result ToString::
+{
+   "Item1": "Content One",
+   "Item2": "Content Two",
+   "Item3": "Content Three"
+}
+```
+
+### Ref readonly Support
+
+As JsonMemory is a struct, its been built to support ref readonly when accessing parsed contents.
+Access the contents via its reference, stopping unneccessary copies.
+
+```CS
+private void TryGet(string jsonData) {
+    JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
+    foreach (ref readonly JsonMemory value in JMemory) {
+        ref readonly JsonMemory innerValue = ref value[0];
+        ...
+    }
+}
+``` 

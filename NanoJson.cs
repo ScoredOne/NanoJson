@@ -128,7 +128,7 @@ namespace NanoJson {
 									break;
 								}
 							}
-							while (JsonMemory.IsWhiteSpace(this.owner.Value[++this.x])) { }
+							while (NanoJsonStatics.IsWhiteSpace(this.owner.Value[++this.x])) { }
 							this.y = this.x;
 							this.index++;
 							while (true) {
@@ -163,7 +163,7 @@ namespace NanoJson {
 
 							ProcessJsonObject:
 							int continuationPoint = this.x;
-							while (JsonMemory.IsWhiteSpace(this.owner.Value[--this.x])) { }
+							while (NanoJsonStatics.IsWhiteSpace(this.owner.Value[--this.x])) { }
 							this.x++;
 							if (!name.IsEmpty) {
 								if (this.y > this.x) {
@@ -226,7 +226,7 @@ namespace NanoJson {
 
 							ProcessJsonObject:
 							int continuationPoint = this.x;
-							while (JsonMemory.IsWhiteSpace(this.owner.Value[this.x - 1])) {
+							while (NanoJsonStatics.IsWhiteSpace(this.owner.Value[this.x - 1])) {
 								this.x--;
 							}
 							if (this.arrayPos == this.index) {
@@ -292,8 +292,8 @@ namespace NanoJson {
 			this.Key = ReadOnlySpan<char>.Empty;
 			int len = read.Length;
 			int x = -1;
-			while (JsonMemory.IsWhiteSpace(read[++x])) { }
-			while (JsonMemory.IsWhiteSpace(read[--len])) { }
+			while (NanoJsonStatics.IsWhiteSpace(read[++x])) { }
+			while (NanoJsonStatics.IsWhiteSpace(read[--len])) { }
 			len++;
 			len -= x;
 			ReadOnlySpan<char> data = read.Slice(x, len);
@@ -342,7 +342,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
-					while (JsonMemory.IsWhiteSpace(data[++x])) { }
+					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
 					if (x == len++) {
 						this.Value = ReadOnlySpan<char>.Empty;
 						this.IsEmpty = true;
@@ -365,7 +365,7 @@ namespace NanoJson {
 					if (len <= x) {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(data));
 					}
-					while (JsonMemory.IsWhiteSpace(data[++x])) { }
+					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
 					if (x == len++) {
 						this.Value = ReadOnlySpan<char>.Empty;
 						this.IsEmpty = true;
@@ -379,7 +379,7 @@ namespace NanoJson {
 				case 'n':
 				case 'N': {
 					this.Type = JsonType.Null;
-					this.Value = JsonMemory.NULL.AsSpan();
+					this.Value = NanoJsonStatics.NULL.AsSpan();
 					this.IsEmpty = false;
 					if (len == 4) {
 						char c = data[++x];
@@ -500,7 +500,7 @@ namespace NanoJson {
 			int nameLen = -1;
 
 			int x = 0;
-			int len = this.Value.Length;
+			int len = this.GetLength;
 			int y;
 			int depth = 0;
 
@@ -537,7 +537,7 @@ namespace NanoJson {
 						break;
 					}
 				}
-				while (JsonMemory.IsWhiteSpace(this.Value[++x])) { }
+				while (NanoJsonStatics.IsWhiteSpace(this.Value[++x])) { }
 				y = x;
 				while (true) {
 					switch (this.Value[x]) {
@@ -571,7 +571,7 @@ namespace NanoJson {
 
 				ProcessJsonObject:
 				int continuationPoint = x;
-				while (JsonMemory.IsWhiteSpace(this.Value[--x])) { }
+				while (NanoJsonStatics.IsWhiteSpace(this.Value[--x])) { }
 				x++;
 				if (found) {
 					if (nameLen == pathLen) {
@@ -595,6 +595,13 @@ namespace NanoJson {
 		public readonly Enumerator GetEnumerator() => new Enumerator(this);
 
 		/// <summary>
+		/// Get the length of the reference area
+		/// </summary>
+		public readonly int GetLength => this.Value.Length;
+
+		public readonly int GetKeyLen => this.Key.Length;
+
+		/// <summary>
 		/// Get the string value as-is in relation to this object
 		/// </summary>
 		public readonly string GetStringLiteral => this.Value.ToString();
@@ -602,7 +609,7 @@ namespace NanoJson {
 		/// <summary>
 		/// Get the decoded string value of the object
 		/// </summary>
-		public readonly string GetStringDecoded => JsonMemory.GetStringDecodedFromSpan(in this.Value);
+		public readonly string GetStringDecoded => NanoJsonStatics.GetStringDecodedFromSpan(in this.Value);
 
 		/// <summary>
 		/// Try to get the string value of the object at path
@@ -626,16 +633,349 @@ namespace NanoJson {
 			}
 		}
 
+		public override string ToString() => this.ToString(NanoJsonStatics.Default_ToStringFormat);
+
+		public readonly string ToString(ToStringFormat format) {
+			int indent = 0;
+			int pos = 0;
+
+			bool pretty = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.Pretty);
+			bool translateUnicode = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
+			bool lowerCaseBool = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
+
+			char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength + 1); // 0 returns empty array?
+			this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref buffer, ref indent, ref pos, NanoJsonStatics.INDENT_TABS.AsSpan());
+			string builtString = buffer.AsSpan().Slice(0, pos).ToString();
+			ArrayPool<char>.Shared.Return(buffer);
+			return builtString;
+		}
+
+		/// <summary>
+		/// Recursive method to build the json ToString output
+		/// </summary>
+		private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
+			switch (this.Type) {
+				case JsonType.String: {
+					sb[sbPos++] = '"';
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
+					if (translateUnicode) {
+						NanoJsonStatics.TranslateUnicodeIntoBufferFromSpan(this.Value, sb.AsSpan(), ref sbPos);
+					}
+					else {
+						ReadOnlySpan<char> refSpan = this.Value;
+						refSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
+						sbPos += this.GetLength;
+					}
+					sb[sbPos++] = '"';
+					return;
+				}
+				case JsonType.Null: {
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 4, ref sb);
+					this.Value.CopyTo(sb.AsSpan(sbPos, 4));
+					sbPos += 4;
+					return;
+				}
+				case JsonType.Number: {
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 32, ref sb);
+					this.GetNumber.TryFormat(sb.AsSpan(sbPos), out int refSpanLen);
+					sbPos += refSpanLen;
+					return;
+				}
+				case JsonType.Boolean: {
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
+					int first = sbPos;
+					this.Value.CopyTo(sb.AsSpan(sbPos, this.GetLength));
+					sbPos += this.GetLength;
+					if (lowerCaseBool) {
+						char c = this.Value[0];
+						switch (c) {
+							case 'f':
+							case 't':
+								sb[first] = c;
+								return;
+							case 'F':
+								sb[first] = 'f';
+								return;
+							case 'T':
+								sb[first] = 't';
+								return;
+						}
+					}
+					return;
+				}
+				case JsonType.Object: {
+					int x;
+					int y;
+					if (pretty && !AsValue) {
+						for (x = indent - 1; x >= 0; x--) {
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + NanoJsonStatics.INDENT_LEN, ref sb);
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
+						}
+					}
+
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 3, ref sb);
+					sb[sbPos++] = '{';
+					if (this.IsEmpty) {
+						if (pretty) {
+							sb[sbPos++] = ' ';
+						}
+						sb[sbPos++] = '}';
+						return;
+					}
+
+					Enumerator enumerator = this.GetEnumerator();
+					JsonSpan prior = JsonSpan.Empty;
+					JsonSpan current = JsonSpan.Empty;
+					int index = 0;
+					if (pretty) {
+						indent++;
+						sb[sbPos++] = '\n';
+						while (enumerator.TryGetIndex(index++, out JsonSpan next)) {
+							current = next;
+							if (!prior.IsNothing) {
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+								for (y = indent - 1; y >= 0; y--) {
+									indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+									sbPos += NanoJsonStatics.INDENT_LEN;
+								}
+								sb[sbPos++] = '"';
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + prior.GetKeyLen + 3, ref sb);
+								prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
+								sbPos += prior.GetKeyLen;
+								sb[sbPos++] = '"';
+								sb[sbPos++] = ':';
+								sb[sbPos++] = ' ';
+								prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+								sb[sbPos++] = ',';
+								sb[sbPos++] = '\n';
+							}
+							prior = current;
+						}
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+						for (y = indent - 1; y >= 0; y--) {
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
+						}
+						sb[sbPos++] = '"';
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + current.GetKeyLen, ref sb);
+						current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
+						sbPos += current.GetKeyLen;
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 3, ref sb);
+						sb[sbPos++] = '"';
+						sb[sbPos++] = ':';
+						sb[sbPos++] = ' ';
+						current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+						sb[sbPos++] = '\n';
+
+						indent--;
+						for (x = indent - 1; x >= 0; x--) {
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
+						}
+					}
+					else {
+						while (enumerator.TryGetIndex(index++, out JsonSpan next)) {
+							current = next;
+							if (!prior.IsNothing) {
+								sb[sbPos++] = '"';
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + prior.GetKeyLen + 3, ref sb);
+								prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
+								sbPos += prior.GetLength;
+								sb[sbPos++] = '"';
+								sb[sbPos++] = ':';
+								sb[sbPos++] = ' ';
+								prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
+								sb[sbPos++] = ',';
+							}
+							prior = current;
+						}
+						sb[sbPos++] = '"';
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + current.GetKeyLen + 3, ref sb);
+						current.Value.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
+						sbPos += current.GetKeyLen;
+						sb[sbPos++] = '"';
+						sb[sbPos++] = ':';
+						sb[sbPos++] = ' ';
+						current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+					}
+
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
+					sb[sbPos++] = '}';
+					return;
+				}
+				case JsonType.Array: {
+					int x;
+					int y;
+					if (pretty && !AsValue) {
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+						for (x = indent - 1; x >= 0; x--) {
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
+						}
+					}
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 4, ref sb);
+					sb[sbPos++] = '[';
+					if (this.IsEmpty) {
+						if (pretty) {
+							sb[sbPos++] = ' ';
+						}
+						sb[sbPos++] = ']';
+						return;
+					}
+
+					Enumerator enumerator = this.GetEnumerator();
+					JsonSpan prior = JsonSpan.Empty;
+					JsonSpan current = JsonSpan.Empty;
+					int index = 0;
+					if (pretty) {
+						indent++;
+						sb[sbPos++] = '\n';
+						while (enumerator.TryGetIndex(index++, out JsonSpan next)) {
+							current = next;
+							if (!prior.IsNothing) {
+								if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)prior.Type)) {
+									NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+									for (y = indent - 1; y >= 0; y--) {
+										indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+										sbPos += NanoJsonStatics.INDENT_LEN;
+									}
+								}
+								prior.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+								sb[sbPos++] = ',';
+								sb[sbPos++] = '\n';
+							}
+							prior = current;
+						}
+						if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)current.Type)) {
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
+							for (y = indent - 1; y >= 0; y--) {
+								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+								sbPos += NanoJsonStatics.INDENT_LEN;
+							}
+						}
+						current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+						sb[sbPos++] = '\n';
+
+						indent--;
+						for (x = indent - 1; x >= 0; x--) {
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
+						}
+					}
+					else {
+						while (enumerator.TryGetIndex(index++, out JsonSpan next)) {
+							current = next;
+							if (!prior.IsNothing) {
+								prior.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+								sb[sbPos++] = ',';
+							}
+							prior = current;
+						}
+						current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
+					}
+
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
+					if (pretty) {
+						sb[sbPos++] = ' ';
+					}
+					sb[sbPos++] = ']';
+					return;
+				}
+			}
+		}
+
 		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
-		public readonly double GetNumber => double.TryParse(this.Value, out double value) ? value : double.NaN;
+		public readonly double GetNumber
+		{
+			get
+			{
+				double returnNumber = double.NaN;
+				if (this.GetLength > 0 && NanoJsonStatics.HasFlag((long)this.Type, (long)JsonType.Number)) {
+					int len = this.GetLength;
+					int pos = 0;
+
+					// handle sign
+					char c = this.Value[pos];
+					bool negative = c == '-';
+					if (negative || c == '+') {
+						pos++;
+					}
+
+					// find 'e' or 'E' for exponent (if any)
+					int eIndex = -1;
+					for (int x = pos; x < len; x++) {
+						c = this.Value[x];
+						if (c == 'e' || c == 'E') {
+							eIndex = x;
+							break;
+						}
+					}
+
+					// main part (integer + fractional) excludes exponent
+					ReadOnlySpan<char> mainSpan = eIndex > 0 ? this.Value.Slice(pos, eIndex - pos) : this.Value.Slice(pos);
+
+					// parse integer and fractional parts precisely
+					double value = 0.0d;
+					bool seenDecimal = false;
+					double fracDiv = 1.0;
+					for (int x = 0; x < mainSpan.Length; x++) {
+						c = mainSpan[x];
+						if (c == '.') {
+							seenDecimal = true;
+							continue;
+						}
+						int digit = NanoJsonStatics.ReadHexNumber(c); // expects '0'..'9'
+						if (!seenDecimal) {
+							value = value * 10.0 + digit;
+						}
+						else {
+							fracDiv *= 10.0;
+							value += digit / fracDiv;
+						}
+					}
+
+					// parse exponent (if present) and apply
+					if (eIndex > 0) {
+						int expPos = eIndex + 1;
+						bool expNegative = false;
+						if (expPos < len) {
+							char ec = this.Value[expPos];
+							expNegative = ec == '-';
+							if (expNegative || ec == '+') {
+								expPos++;
+							}
+						}
+						int expVal = 0;
+						for (int x = expPos; x < len; x++) {
+							expVal = expVal * 10 + NanoJsonStatics.ReadHexNumber(this.Value[x]);
+						}
+						if (expNegative) {
+							expVal = -expVal;
+						}
+						value *= Math.Pow(10.0, expVal);
+					}
+
+					returnNumber = negative ? -value : value;
+				}
+				return returnNumber;
+			}
+		}
 
 		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return double.TryParse(this.Value, out double value) ? JsonMemory.GetConvertedValue<T>(value) : default;
+			return double.TryParse(this.Value, out double value) ? NanoJsonStatics.GetConvertedValue<T>(value) : default;
 		}
 
 		/// <summary>
@@ -764,7 +1104,7 @@ namespace NanoJson {
 		/// Gets this value as a System.DateTime using TryParse
 		/// </summary>
 		public bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
-			if (this.TryGetKey(in key, out JsonSpan value) && JsonMemory.HasFlag((long)JsonType.DateTime, (long)this.Type)) {
+			if (this.TryGetKey(in key, out JsonSpan value) && NanoJsonStatics.HasFlag((long)JsonType.DateTime, (long)this.Type)) {
 				@out = value.GetDateTime;
 				return true;
 			}
@@ -803,8 +1143,8 @@ namespace NanoJson {
 			int len = reference.Length;
 			int x = -1;
 			ReadOnlySpan<char> data = reference.Span;
-			while (JsonMemory.IsWhiteSpace(data[++x])) { }
-			while (JsonMemory.IsWhiteSpace(data[--len])) { }
+			while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
+			while (NanoJsonStatics.IsWhiteSpace(data[--len])) { }
 			len -= x - 1; // Len - x + 1 (0 index to 1 index)
 			switch (data[x]) {
 				case '"': {
@@ -835,7 +1175,7 @@ namespace NanoJson {
 						}
 					}
 					x = 0;
-					while (JsonMemory.IsWhiteSpace(data[++x])) { }
+					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
 					if (x == len) {
 						this.InnerValues = Array.Empty<JsonMemory>();
 						return;
@@ -847,7 +1187,7 @@ namespace NanoJson {
 						bufferSource = true;
 					}
 					else {
-						JsonMemory.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
+						NanoJsonStatics.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
 					}
 
 					int depth = 0;
@@ -887,7 +1227,7 @@ namespace NanoJson {
 									newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
 									existingBuffer[bTemp] = newValue;
 									left = ++right;
-									JsonMemory.EnsureBufferCapacity(bufPos, ref existingBuffer);
+									NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
 									continue;
 								}
 								break;
@@ -916,7 +1256,7 @@ namespace NanoJson {
 						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
 					}
 					x = 0;
-					while (JsonMemory.IsWhiteSpace(data[++x])) { }
+					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
 					if (x == len) {
 						this.InnerValues = Array.Empty<JsonMemory>();
 						return;
@@ -927,7 +1267,7 @@ namespace NanoJson {
 						bufferSource = true;
 					}
 					else {
-						JsonMemory.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
+						NanoJsonStatics.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
 					}
 
 					int depth = 0;
@@ -965,7 +1305,7 @@ namespace NanoJson {
 								break;
 							}
 						}
-						while (JsonMemory.IsWhiteSpace(data[++right])) { }
+						while (NanoJsonStatics.IsWhiteSpace(data[++right])) { }
 						left = right;
 
 						while (true) {
@@ -1006,7 +1346,7 @@ namespace NanoJson {
 						bTemp = bufPos;
 						newValue = new JsonMemory(this.ReferenceData.Slice(nameL, nameR), this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
 						existingBuffer[bTemp] = newValue;
-						JsonMemory.EnsureBufferCapacity(bufPos, ref existingBuffer);
+						NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
 					}
 
 					ReadComplete:
@@ -1027,7 +1367,7 @@ namespace NanoJson {
 							if (c == 'l' || c == 'L') {
 								c = data[++x];
 								if (c == 'l' || c == 'L') {
-									this.ReferenceData = NULL.AsMemory();
+									this.ReferenceData = NanoJsonStatics.NULL.AsMemory();
 									return;
 								}
 							}
@@ -1184,7 +1524,7 @@ namespace NanoJson {
 		private JsonMemory(in ReadOnlyMemory<char> key) {
 			this.KeyData = key;
 			this.Type = JsonType.Null;
-			this.ReferenceData = NULL.AsMemory();
+			this.ReferenceData = NanoJsonStatics.NULL.AsMemory();
 			this.InnerValues = Array.Empty<JsonMemory>();
 		}
 
@@ -1216,7 +1556,7 @@ namespace NanoJson {
 			get
 			{
 				if (this.Type == JsonType.Object) {
-					int hash = JsonMemory.ComputeHash(in key, out int pathLen);
+					int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
 					for (int x = this.InnerLength - 1; x >= 0; x--) {
 						ref readonly JsonMemory value = ref this.InnerValues[x];
 						if (hash == value.KeyHash) {
@@ -1224,7 +1564,7 @@ namespace NanoJson {
 						}
 						else {
 							int len = value.KeyLen;
-							if (pathLen > len && JsonMemory.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
+							if (pathLen > len && NanoJsonStatics.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
 								return ref value[key.Slice(++len)];
 							}
 						}
@@ -1255,37 +1595,21 @@ namespace NanoJson {
 			}
 		}
 
-		private readonly int KeyHash => JsonMemory.ComputeHash(this.KeyData.Span, out _);
+		private readonly int KeyHash => NanoJsonStatics.ComputeHash(this.KeyData.Span, out _);
 		private readonly int KeyLen => this.GetKeyAsSpan.Length;
 
-		[Serializable, Flags]
-		public enum ToStringFormat : long {
-			None = 0,
-			Pretty = 0x1,
-			TranslateUnicode = 0x2,
-			LowerCaseBool = 0x4,
-
-			Default = Pretty | TranslateUnicode,
-			All = Pretty | TranslateUnicode | LowerCaseBool,
-		}
-
-		/// <summary>
-		/// Format used by the basic <c>.ToString()</c>
-		/// </summary>
-		public static ToStringFormat Default_ToStringFormat = ToStringFormat.Pretty | ToStringFormat.TranslateUnicode;
-
-		public readonly override string ToString() => this.ToString(Default_ToStringFormat);
+		public readonly override string ToString() => this.ToString(NanoJsonStatics.Default_ToStringFormat);
 
 		public readonly string ToString(ToStringFormat format) {
 			int indent = 0;
 			int pos = 0;
 
-			bool pretty = JsonMemory.HasFlag((long)format, (long)ToStringFormat.Pretty);
-			bool translateUnicode = JsonMemory.HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
-			bool lowerCaseBool = JsonMemory.HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
+			bool pretty = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.Pretty);
+			bool translateUnicode = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
+			bool lowerCaseBool = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
 
 			char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength + 1); // 0 returns empty array?
-			this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
+			this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref buffer, ref indent, ref pos, NanoJsonStatics.INDENT_TABS.AsSpan());
 			string builtString = buffer.AsSpan().Slice(0, pos).ToString();
 			ArrayPool<char>.Shared.Return(buffer);
 			return builtString;
@@ -1298,9 +1622,9 @@ namespace NanoJson {
 			switch (this.Type) {
 				case JsonType.String: {
 					sb[sbPos++] = '"';
-					JsonMemory.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
 					if (translateUnicode) {
-						JsonMemory.TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb.AsSpan(), ref sbPos);
+						NanoJsonStatics.TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb.AsSpan(), ref sbPos);
 					}
 					else {
 						ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
@@ -1311,20 +1635,20 @@ namespace NanoJson {
 					return;
 				}
 				case JsonType.Null: {
-					JsonMemory.EnsureBufferCapacity(sbPos + 4, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 4, ref sb);
 					this.GetValueAsSpan.CopyTo(sb.AsSpan(sbPos, 4));
 					sbPos += 4;
 					return;
 				}
 				case JsonType.Number: {
-					JsonMemory.EnsureBufferCapacity(sbPos + 32, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 32, ref sb);
 					this.GetNumber.TryFormat(sb.AsSpan(sbPos), out int refSpanLen);
 					sbPos += refSpanLen;
 					return;
 				}
 				case JsonType.Boolean: {
 					ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
-					JsonMemory.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
 					int first = sbPos;
 					refSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
 					sbPos += this.GetLength;
@@ -1350,13 +1674,13 @@ namespace NanoJson {
 					int y;
 					if (pretty && !AsValue) {
 						for (x = indent - 1; x >= 0; x--) {
-							JsonMemory.EnsureBufferCapacity(sbPos + INDENT_LEN, ref sb);
-							indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-							sbPos += INDENT_LEN;
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + NanoJsonStatics.INDENT_LEN, ref sb);
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
 					}
 
-					JsonMemory.EnsureBufferCapacity(sbPos + 3, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 3, ref sb);
 					sb[sbPos++] = '{';
 
 					if (this.InnerLength == 0) {
@@ -1366,71 +1690,71 @@ namespace NanoJson {
 						sb[sbPos++] = '}';
 						return;
 					}
-					indent++;
 					int limit = this.InnerLength - 1;
 					if (pretty) {
-						JsonMemory.EnsureBufferCapacity(sbPos + 1, ref sb);
+						indent++;
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 						sb[sbPos++] = '\n';
 						for (x = 0; x < limit; x++) {
 							ref readonly JsonMemory value = ref this.InnerValues[x];
-							JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 							for (y = indent - 1; y >= 0; y--) {
-								indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-								sbPos += INDENT_LEN;
+								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+								sbPos += NanoJsonStatics.INDENT_LEN;
 							}
 							sb[sbPos++] = '"';
-							JsonMemory.EnsureBufferCapacity(sbPos + value.KeyLen + 3, ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + value.KeyLen + 3, ref sb);
 							value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
 							sbPos += value.KeyLen;
 							sb[sbPos++] = '"';
 							sb[sbPos++] = ':';
 							sb[sbPos++] = ' ';
 							value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-							JsonMemory.EnsureBufferCapacity(sbPos + 2, ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
 							sb[sbPos++] = ',';
 							sb[sbPos++] = '\n';
 						}
 						ref readonly JsonMemory valueLast = ref this.InnerValues[x];
-						JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 						for (y = indent - 1; y >= 0; y--) {
-							indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-							sbPos += INDENT_LEN;
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
 						sb[sbPos++] = '"';
-						JsonMemory.EnsureBufferCapacity(sbPos + valueLast.KeyLen, ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + valueLast.KeyLen, ref sb);
 						valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
 						sbPos += valueLast.KeyLen;
-						JsonMemory.EnsureBufferCapacity(sbPos + 3, ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 3, ref sb);
 						sb[sbPos++] = '"';
 						sb[sbPos++] = ':';
 						sb[sbPos++] = ' ';
 						valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-						JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 						sb[sbPos++] = '\n';
 
 						indent--;
 						for (x = indent - 1; x >= 0; x--) {
-							indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-							sbPos += INDENT_LEN;
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
 					}
 					else {
 						for (x = 0; x < limit; x++) {
 							ref readonly JsonMemory value = ref this.InnerValues[x];
 							sb[sbPos++] = '"';
-							JsonMemory.EnsureBufferCapacity(sbPos + value.KeyLen + 3, ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + value.KeyLen + 3, ref sb);
 							value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
 							sbPos += value.KeyLen;
 							sb[sbPos++] = '"';
 							sb[sbPos++] = ':';
 							sb[sbPos++] = ' ';
 							value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-							JsonMemory.EnsureBufferCapacity(sbPos + 1, ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 							sb[sbPos++] = ',';
 						}
 						ref readonly JsonMemory valueLast = ref this.InnerValues[x];
 						sb[sbPos++] = '"';
-						JsonMemory.EnsureBufferCapacity(sbPos + valueLast.KeyLen + 3, ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + valueLast.KeyLen + 3, ref sb);
 						valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
 						sbPos += valueLast.KeyLen;
 						sb[sbPos++] = '"';
@@ -1439,7 +1763,7 @@ namespace NanoJson {
 						valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
 					}
 
-					JsonMemory.EnsureBufferCapacity(sbPos + 1, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 					sb[sbPos++] = '}';
 					return;
 				}
@@ -1447,13 +1771,13 @@ namespace NanoJson {
 					int x;
 					int y;
 					if (pretty && !AsValue) {
-						JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 						for (x = indent - 1; x >= 0; x--) {
-							indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-							sbPos += INDENT_LEN;
+							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
 					}
-					JsonMemory.EnsureBufferCapacity(sbPos + 4, ref sb);
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 4, ref sb);
 					sb[sbPos++] = '[';
 
 					if (this.InnerLength == 0) {
@@ -1463,52 +1787,52 @@ namespace NanoJson {
 						sb[sbPos++] = ']';
 					}
 					else {
-						indent++;
 						int limit = this.InnerLength - 1;
 						if (pretty) {
+							indent++;
 							sb[sbPos++] = '\n';
 							for (x = 0; x < limit; x++) {
 								ref readonly JsonMemory value = ref this.InnerValues[x];
-								if (JsonMemory.HasFlag((long)JsonType.Value, (long)value.Type)) {
-									JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+								if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)value.Type)) {
+									NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 									for (y = indent - 1; y >= 0; y--) {
-										indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-										sbPos += INDENT_LEN;
+										indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+										sbPos += NanoJsonStatics.INDENT_LEN;
 									}
 								}
 								value.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-								JsonMemory.EnsureBufferCapacity(sbPos + 2, ref sb);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
 								sb[sbPos++] = ',';
 								sb[sbPos++] = '\n';
 							}
 							ref readonly JsonMemory valueLast = ref this.InnerValues[x];
-							if (JsonMemory.HasFlag((long)JsonType.Value, (long)valueLast.Type)) {
-								JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+							if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)valueLast.Type)) {
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 								for (y = indent - 1; y >= 0; y--) {
-									indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-									sbPos += INDENT_LEN;
+									indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+									sbPos += NanoJsonStatics.INDENT_LEN;
 								}
 							}
 							valueLast.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-							JsonMemory.EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
+							NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent) + 1, ref sb);
 							sb[sbPos++] = '\n';
 
 							indent--;
 							for (x = indent - 1; x >= 0; x--) {
-								indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-								sbPos += INDENT_LEN;
+								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
+								sbPos += NanoJsonStatics.INDENT_LEN;
 							}
 						}
 						else {
 							for (x = 0; x < limit; x++) {
 								this.InnerValues[x].ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
-								JsonMemory.EnsureBufferCapacity(sbPos + 1, ref sb);
+								NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 								sb[sbPos++] = ',';
 							}
 							this.InnerValues[x].ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
 						}
 
-						JsonMemory.EnsureBufferCapacity(sbPos + 1, ref sb);
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 						sb[sbPos++] = ']';
 					}
 					return;
@@ -1526,12 +1850,12 @@ namespace NanoJson {
 		/// </summary>
 		public readonly string GetStringLiteral => this.ReferenceData.ToString();
 
-		public readonly int GetTranslatedUnicodeLength => JsonMemory.GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
+		public readonly int GetTranslatedUnicodeLength => NanoJsonStatics.GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
 
 		/// <summary>
 		/// Get the decoded string value of the object
 		/// </summary>
-		public readonly string GetStringDecoded => JsonMemory.GetStringDecodedFromSpan(this.GetValueAsSpan);
+		public readonly string GetStringDecoded => NanoJsonStatics.GetStringDecodedFromSpan(this.GetValueAsSpan);
 
 		/// <summary>
 		/// Try to get the string value of the object at path
@@ -1591,9 +1915,9 @@ namespace NanoJson {
 			get
 			{
 				double returnNumber = double.NaN;
-				if (this.GetLength > 0 && JsonMemory.HasFlag((long)this.Type, (long)JsonType.Number)) {
+				if (this.GetLength > 0 && NanoJsonStatics.HasFlag((long)this.Type, (long)JsonType.Number)) {
 					ReadOnlySpan<char> data = this.GetValueAsSpan;
-					int len = data.Length;
+					int len = this.GetLength;
 					int pos = 0;
 
 					// handle sign
@@ -1626,7 +1950,7 @@ namespace NanoJson {
 							seenDecimal = true;
 							continue;
 						}
-						int digit = JsonMemory.ReadHexNumber(c); // expects '0'..'9'
+						int digit = NanoJsonStatics.ReadHexNumber(c); // expects '0'..'9'
 						if (!seenDecimal) {
 							value = value * 10.0 + digit;
 						}
@@ -1649,7 +1973,7 @@ namespace NanoJson {
 						}
 						int expVal = 0;
 						for (int x = expPos; x < len; x++) {
-							expVal = expVal * 10 + JsonMemory.ReadHexNumber(data[x]);
+							expVal = expVal * 10 + NanoJsonStatics.ReadHexNumber(data[x]);
 						}
 						if (expNegative) {
 							expVal = -expVal;
@@ -1662,11 +1986,12 @@ namespace NanoJson {
 				return returnNumber;
 			}
 		}
+
 		/// <summary>
 		/// Get the number contained inside This object
 		/// </summary>
 		public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			return double.TryParse(this.GetValueAsSpan, out double value) ? GetConvertedValue<T>(value) : default;
+			return double.TryParse(this.GetValueAsSpan, out double value) ? NanoJsonStatics.GetConvertedValue<T>(value) : default;
 		}
 
 
@@ -1809,7 +2134,7 @@ namespace NanoJson {
 		/// Gets this value as a System.DateTime using TryParse
 		/// </summary>
 		public readonly bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
-			if (this.TryGetKey(in key, out JsonMemory value) && JsonMemory.HasFlag((long)JsonType.DateTime, (long)value.Type)) {
+			if (this.TryGetKey(in key, out JsonMemory value) && NanoJsonStatics.HasFlag((long)JsonType.DateTime, (long)value.Type)) {
 				@out = value.GetDateTime;
 				return true;
 			}
@@ -1867,7 +2192,7 @@ namespace NanoJson {
 		/// <param name="key"></param>
 		/// <returns></returns>
 		public readonly bool CompareKey(in ReadOnlySpan<char> key) {
-			return this.KeyHash == JsonMemory.ComputeHash(key, out _);
+			return this.KeyHash == NanoJsonStatics.ComputeHash(key, out _);
 		}
 
 		/// <summary>
@@ -1883,7 +2208,7 @@ namespace NanoJson {
 		/// <returns>Key Found</returns>
 		public readonly bool TryGetKey(in ReadOnlySpan<char> key, out JsonMemory found) {
 			if (this.Type == JsonType.Object) {
-				int hash = JsonMemory.ComputeHash(in key, out int pathLen);
+				int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
 				for (int x = this.InnerLength - 1; x >= 0; x--) {
 					ref readonly JsonMemory value = ref this.InnerValues[x];
 					if (hash == value.KeyHash) {
@@ -1892,7 +2217,7 @@ namespace NanoJson {
 					}
 					else {
 						int len = value.KeyLen;
-						if (pathLen > len && JsonMemory.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
+						if (pathLen > len && NanoJsonStatics.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
 							if (value.TryGetKey(key[++len..], out found)) {
 								return true;
 							}
@@ -1919,7 +2244,7 @@ namespace NanoJson {
 		/// <returns>Key reference</returns>
 		public readonly ref readonly JsonMemory TryGetKeyRef(ReadOnlySpan<char> key, out bool found) {
 			if (this.Type == JsonType.Object) {
-				int hash = JsonMemory.ComputeHash(in key, out int pathLen);
+				int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
 				for (int x = this.InnerLength - 1; x >= 0; x--) {
 					ref readonly JsonMemory value = ref this.InnerValues[x];
 					if (hash == value.KeyHash) {
@@ -1927,7 +2252,7 @@ namespace NanoJson {
 						return ref value;
 					}
 					int len = value.KeyLen;
-					if (pathLen > len && JsonMemory.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
+					if (pathLen > len && NanoJsonStatics.ComputeHash(key.Slice(0, len), out _) == value.KeyHash) {
 						ref readonly JsonMemory candidate = ref value.TryGetKeyRef(key.Slice(++len), out found);
 						if (found) {
 							return ref candidate;
@@ -1988,195 +2313,9 @@ namespace NanoJson {
 			return container.GetCopyOfInsideValues;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-			unchecked {
-				switch (System.Type.GetTypeCode(typeof(T))) {
-					case TypeCode.SByte: { return (sbyte)value is T r ? r : default; }
-					case TypeCode.Byte: { return (byte)value is T r ? r : default; }
-					case TypeCode.Int16: { return (short)value is T r ? r : default; }
-					case TypeCode.UInt16: { return (ushort)value is T r ? r : default; }
-					case TypeCode.Int32: { return (int)value is T r ? r : default; }
-					case TypeCode.UInt32: { return (uint)value is T r ? r : default; }
-					case TypeCode.Int64: { return (long)value is T r ? r : default; }
-					case TypeCode.UInt64: { return (ulong)value is T r ? r : default; }
-					case TypeCode.Single: { return (float)value is T r ? r : default; }
-					case TypeCode.Double: { return value is T r ? r : default; }
-					case TypeCode.Decimal: { return (decimal)value is T r ? r : default; }
-					default:
-						throw new NotSupportedException(typeof(T).Name);
-				}
-			}
-		}
-
-		public static string GetStringDecodedFromSpan(in ReadOnlySpan<char> data) {
-			int len = data.Length;
-			int x = 0;
-			if (len <= 256) { // fast-path for small strings: stackalloc to avoid ArrayPool rent
-				Span<char> stackBuffer = stackalloc char[len];
-				JsonMemory.TranslateUnicodeIntoBufferFromSpan(in data, in stackBuffer, ref x);
-				return stackBuffer.Slice(0, x).ToString();
-			}
-			char[] buffer = ArrayPool<char>.Shared.Rent(len);
-			Span<char> bufSpan = buffer.AsSpan(0, len);
-			JsonMemory.TranslateUnicodeIntoBufferFromSpan(in data, in bufSpan, ref x);
-			string decodedValue = bufSpan.Slice(0, x).ToString();
-			ArrayPool<char>.Shared.Return(buffer);
-			return decodedValue;
-		}
-
-		public static int GetStringDecodeLengthFromSpan(in ReadOnlySpan<char> data) {
-			int count = 0;
-			int len = data.Length;
-			int x = len;
-			int check = Math.Max(len - 6, 0);
-			while (x > check) {
-				if (data[--x] == '\\') {
-					if (x + 5 < len && data[x + 1] == 'u') {
-						count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
-					}
-				}
-				else {
-					count++;
-				}
-			}
-			while (x > 0) {
-				if (data[--x] == '\\') {
-					if (data[x + 1] == 'u') { // Now safe, len check removed
-						count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
-					}
-				}
-				else {
-					count++;
-				}
-			}
-			return count;
-		}
-
-		public static void TranslateUnicodeIntoBufferFromSpan(in ReadOnlySpan<char> data, in Span<char> buffer, ref int sbPos) {
-			int len = data.Length;
-			int x = -1;
-			int y = 0;
-			int requiredLen;
-			while (++x < len) {
-				if (data[x] == '\\') {
-					requiredLen = x - y;
-					data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
-					sbPos += requiredLen;
-					if (++x < len) {
-						char current = data[x];
-						switch (current) {
-							case 'n':
-								buffer[sbPos++] = '\n';
-								break;
-							case 't':
-								buffer[sbPos++] = '\t';
-								break;
-							case 'u': {
-								if (x + 4 >= len) {
-									break;
-								}
-								buffer[sbPos++] = (char)((JsonMemory.ReadHexNumber(data[++x]) * 4096)
-										+ (JsonMemory.ReadHexNumber(data[++x]) * 256)
-										+ (JsonMemory.ReadHexNumber(data[++x]) * 16)
-										+ JsonMemory.ReadHexNumber(data[++x]));
-								break;
-							}
-							case 'r':
-								buffer[sbPos++] = '\r';
-								break;
-							case 'f':
-								buffer[sbPos++] = '\f';
-								break;
-							case 'b':
-								buffer[sbPos++] = '\b';
-								break;
-							case 'a':
-								buffer[sbPos++] = '\a';
-								break;
-							default:
-								buffer[sbPos++] = current;
-								break;
-						}
-					}
-					y = x + 1;
-				}
-			}
-			requiredLen = len - y; // add data after final unicode to the end of the buffer
-			data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
-			sbPos += requiredLen;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void EnsureBufferCapacity<T>(int nextIndex, ref T[] buffer) {
-			if (nextIndex >= buffer.Length) {
-				T[] newArray = ArrayPool<T>.Shared.Rent(buffer.Length + 1);
-				buffer.CopyTo(newArray.AsSpan());
-				ArrayPool<T>.Shared.Return(buffer);
-				buffer = newArray;
-			}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool IsWhiteSpace(char character) {
-			return character <= 32;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static int ReadHexNumber(char character) {
-			switch (character) {
-				case '0':
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-				case '8':
-				case '9':
-					return character - 48;
-				case 'A':
-				case 'B':
-				case 'C':
-				case 'D':
-				case 'E':
-				case 'F':
-					return character - 55;
-				case 'a':
-				case 'b':
-				case 'c':
-				case 'd':
-				case 'e':
-				case 'f':
-					return character - 87;
-				default:
-					throw new FormatException(nameof(character));
-			}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static int ComputeHash(in ReadOnlySpan<char> data, out int len) {
-			int hash = 17; // Initial hash value
-			len = data.Length;
-			for (int x = len - 1; x >= 0; x--) {
-				hash = hash * 31 + data[x]; // Combine hash with character
-			}
-			return hash; // Return the final hash value
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool HasFlag(long left, long right) {
-			return (left & right) > 0;
-		}
-
 		public int CompareTo(JsonMemory other) {
 			return this.KeyHash.CompareTo(other.KeyHash);
 		}
-
-		private const string INDENT_TABS = "   ";
-		private const int INDENT_LEN = 3;
-		public const string NULL = "null";
 
 		private readonly static JsonMemory Empty_Body = new JsonMemory(ReadOnlyMemory<char>.Empty);
 		public static ref readonly JsonMemory Empty => ref JsonMemory.Empty_Body;
@@ -2435,6 +2574,237 @@ namespace NanoJson {
 			return new JsonMemory(in key);
 		}
 
+	}
+
+	#endregion
+
+	#region ### NanoJsonStatics ###
+
+	public static class NanoJsonStatics {
+
+		public const string INDENT_TABS = "   ";
+		public const int INDENT_LEN = 3;
+		public const string NULL = "null";
+
+		/// <summary>
+		/// Format used by the basic <c>.ToString()</c>
+		/// </summary>
+		public static ToStringFormat Default_ToStringFormat = ToStringFormat.Pretty | ToStringFormat.TranslateUnicode;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+			unchecked {
+				switch (System.Type.GetTypeCode(typeof(T))) {
+					case TypeCode.SByte: { return (sbyte)value is T r ? r : default; }
+					case TypeCode.Byte: { return (byte)value is T r ? r : default; }
+					case TypeCode.Int16: { return (short)value is T r ? r : default; }
+					case TypeCode.UInt16: { return (ushort)value is T r ? r : default; }
+					case TypeCode.Int32: { return (int)value is T r ? r : default; }
+					case TypeCode.UInt32: { return (uint)value is T r ? r : default; }
+					case TypeCode.Int64: { return (long)value is T r ? r : default; }
+					case TypeCode.UInt64: { return (ulong)value is T r ? r : default; }
+					case TypeCode.Single: { return (float)value is T r ? r : default; }
+					case TypeCode.Double: { return value is T r ? r : default; }
+					case TypeCode.Decimal: { return (decimal)value is T r ? r : default; }
+					default:
+						throw new NotSupportedException(typeof(T).Name);
+				}
+			}
+		}
+
+		public static string GetStringDecodedFromSpan(in ReadOnlySpan<char> data) {
+			int len = data.Length;
+			int x = 0;
+			if (len <= 256) { // fast-path for small strings: stackalloc to avoid ArrayPool rent
+				Span<char> stackBuffer = stackalloc char[len];
+				TranslateUnicodeIntoBufferFromSpan(in data, in stackBuffer, ref x);
+				return stackBuffer.Slice(0, x).ToString();
+			}
+			char[] buffer = ArrayPool<char>.Shared.Rent(len);
+			Span<char> bufSpan = buffer.AsSpan(0, len);
+			TranslateUnicodeIntoBufferFromSpan(in data, in bufSpan, ref x);
+			string decodedValue = bufSpan.Slice(0, x).ToString();
+			ArrayPool<char>.Shared.Return(buffer);
+			return decodedValue;
+		}
+
+		public static int GetStringDecodeLengthFromSpan(in ReadOnlySpan<char> data) {
+			int count = 0;
+			int len = data.Length;
+			int x = len;
+			int check = Math.Max(len - 6, 0);
+			while (x > check) {
+				if (data[--x] == '\\') {
+					if (x + 5 < len && data[x + 1] == 'u') {
+						count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
+					}
+				}
+				else {
+					count++;
+				}
+			}
+			while (x > 0) {
+				if (data[--x] == '\\') {
+					if (data[x + 1] == 'u') { // Now safe, len check removed
+						count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
+					}
+				}
+				else {
+					count++;
+				}
+			}
+			return count;
+		}
+
+		public static void TranslateUnicodeIntoBufferFromSpan(in ReadOnlySpan<char> data, in Span<char> buffer, ref int sbPos) {
+			int len = data.Length;
+			int x = -1;
+			int y = 0;
+			int requiredLen;
+			while (++x < len) {
+				if (data[x] == '\\') {
+					requiredLen = x - y;
+					data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
+					sbPos += requiredLen;
+					if (++x < len) {
+						char current = data[x];
+						switch (current) {
+							case 'n':
+								buffer[sbPos++] = '\n';
+								break;
+							case 't':
+								buffer[sbPos++] = '\t';
+								break;
+							case 'u': {
+								if (x + 4 >= len) {
+									break;
+								}
+								buffer[sbPos++] = (char)((ReadHexNumber(data[++x]) * 4096)
+										+ (ReadHexNumber(data[++x]) * 256)
+										+ (ReadHexNumber(data[++x]) * 16)
+										+ ReadHexNumber(data[++x]));
+								break;
+							}
+							case 'r':
+								buffer[sbPos++] = '\r';
+								break;
+							case 'f':
+								buffer[sbPos++] = '\f';
+								break;
+							case 'b':
+								buffer[sbPos++] = '\b';
+								break;
+							case 'a':
+								buffer[sbPos++] = '\a';
+								break;
+							default:
+								buffer[sbPos++] = current;
+								break;
+						}
+					}
+					y = x + 1;
+				}
+			}
+			requiredLen = len - y; // add data after final unicode to the end of the buffer
+			data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
+			sbPos += requiredLen;
+		}
+
+		/// <summary>
+		/// <c>USES ARRAYPOOL ARRAYS</c>, do not insert normal arrays
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="nextIndex"></param>
+		/// <param name="buffer"></param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void EnsureBufferCapacity<T>(int nextIndex, ref T[] buffer) {
+			if (nextIndex >= buffer.Length) {
+				T[] newArray = ArrayPool<T>.Shared.Rent(buffer.Length + 1);
+				buffer.CopyTo(newArray.AsSpan());
+				ArrayPool<T>.Shared.Return(buffer);
+				buffer = newArray;
+			}
+		}
+
+		/// <summary>
+		/// Returns true if char value is less than 33
+		/// </summary>
+		/// <param name="character"></param>
+		/// <returns></returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsWhiteSpace(char character) {
+			return character < 33;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static int ReadHexNumber(char character) {
+			switch (character) {
+				case '0':
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+				case '5':
+				case '6':
+				case '7':
+				case '8':
+				case '9':
+					return character - 48;
+				case 'A':
+				case 'B':
+				case 'C':
+				case 'D':
+				case 'E':
+				case 'F':
+					return character - 55;
+				case 'a':
+				case 'b':
+				case 'c':
+				case 'd':
+				case 'e':
+				case 'f':
+					return character - 87;
+				default:
+					throw new FormatException(nameof(character));
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static int ComputeHash(in ReadOnlySpan<char> data, out int len) {
+			int hash = 17; // Initial hash value
+			len = data.Length;
+			for (int x = len - 1; x >= 0; x--) {
+				hash = hash * 31 + data[x]; // Combine hash with character
+			}
+			return hash; // Return the final hash value
+		}
+
+		/// <summary>
+		/// Checks if left has flag value of right
+		/// </summary>
+		/// <param name="left"></param>
+		/// <param name="right"></param>
+		/// <returns></returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool HasFlag(long left, long right) {
+			return (left & right) > 0;
+		}
+
+	}
+
+	#endregion
+
+	#region ### ToStringFormat ###
+
+	[Serializable, Flags]
+	public enum ToStringFormat : long {
+		None = 0,
+		Pretty = 0x1,
+		TranslateUnicode = 0x2,
+		LowerCaseBool = 0x4,
+
+		Default = Pretty | TranslateUnicode,
+		All = Pretty | TranslateUnicode | LowerCaseBool,
 	}
 
 	#endregion
