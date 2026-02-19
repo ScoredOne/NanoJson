@@ -197,7 +197,7 @@ private void GetString(string jsonData) {
     JsonMemory JMemory = JsonMemory.ParseJson(jsonData);
     string jsonString = JMemory.ToString(ToStringFormat.Pretty | ToStringFormat.TranslateUnicode);
 
-    // JMemory.ToString() == JMemory.ToString(JsonMemory.Default_ToStringFormat)
+    // JMemory.ToString() == JMemory.ToString(NanoJsonStatics.Default_ToStringFormat)
 }
 ```  
 
