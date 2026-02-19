@@ -6,11 +6,12 @@
 NetStandard 2.1  
 
 Small and simple Json Parser to minimise memory allocation of Json.  
+(Formerly NanoJson.NJson ext)
 
 Theory:
 - String goes in
 - Get Memory of String
-- Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
+- Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations.
 
 // * Summary *
 
