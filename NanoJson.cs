@@ -656,8 +656,8 @@ namespace NanoJson {
 		private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
 			switch (this.Type) {
 				case JsonType.String: {
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
 					sb[sbPos++] = '"';
-					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
 					if (translateUnicode) {
 						NanoJsonStatics.TranslateUnicodeIntoBufferFromSpan(this.Value, sb.AsSpan(), ref sbPos);
 					}
@@ -1621,8 +1621,8 @@ namespace NanoJson {
 		private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
 			switch (this.Type) {
 				case JsonType.String: {
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
 					sb[sbPos++] = '"';
-					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
 					if (translateUnicode) {
 						NanoJsonStatics.TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb.AsSpan(), ref sbPos);
 					}
@@ -2335,7 +2335,7 @@ namespace NanoJson {
 				if (data.Span.Trim().IsEmpty) {
 					return JsonMemory.CreateNull(key);
 				}
-				JsonMemory[] buffer = null;
+				JsonMemory[] buffer = Array.Empty<JsonMemory>();
 				return new JsonMemory(in key, in data, ref buffer, 0);
 			}
 		}
@@ -2370,7 +2370,7 @@ namespace NanoJson {
 			if (data.Span.Trim().IsEmpty) {
 				return JsonMemory.Empty;
 			}
-			JsonMemory[] buffer = null;
+			JsonMemory[] buffer = Array.Empty<JsonMemory>();
 			return new JsonMemory(ReadOnlyMemory<char>.Empty, in data, ref buffer, 0);
 		}
 
@@ -2719,7 +2719,7 @@ namespace NanoJson {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnsureBufferCapacity<T>(int nextIndex, ref T[] buffer) {
 			if (nextIndex >= buffer.Length) {
-				T[] newArray = ArrayPool<T>.Shared.Rent(buffer.Length + 1);
+				T[] newArray = ArrayPool<T>.Shared.Rent(nextIndex + 1);
 				buffer.CopyTo(newArray.AsSpan());
 				ArrayPool<T>.Shared.Return(buffer);
 				buffer = newArray;
