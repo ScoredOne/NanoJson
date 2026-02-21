@@ -50,7 +50,7 @@ Job=.NET 9.0  Runtime=.NET 9.0
 | NewtonsoftJson           | ParseToSingleValue | 460,828.79 ns | 4,095.251 ns | 3,830.700 ns | 36.6211 | 26.3672 |       - |  618136 B |
 
 *JsonSpan doesnt parse on data insersion. Hence the results of JustParse.
-**JsonSpan as it cant store store the nodes, parses and reads the nodes as JsonSpan then pins them to memory as JsonMemory before running ToString
+**JsonSpan as it cant store the nodes, parses and reads the nodes as JsonSpan then pins them to memory as JsonMemory before running ToString
 
 Test format:  
 JustParse			= Create object of library and parse json file into it. No output requested from object.  
