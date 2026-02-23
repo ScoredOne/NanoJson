@@ -19,7 +19,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace NanoJson {
-	
+
 	#region ### JsonSpan ###
 
 	public readonly ref struct JsonSpan {
@@ -731,7 +731,7 @@ namespace NanoJson {
 							current = next;
 							if (!prior.IsNothing) {
 								NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-								for (y = indent - 1; y >= 0; y--) {
+								for (y = indent; --y >= 0;) {
 									indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 									sbPos += NanoJsonStatics.INDENT_LEN;
 								}
@@ -750,7 +750,7 @@ namespace NanoJson {
 							prior = current;
 						}
 						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-						for (y = indent - 1; y >= 0; y--) {
+						for (y = indent; --y >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -767,7 +767,7 @@ namespace NanoJson {
 						sb[sbPos++] = '\n';
 
 						indent--;
-						for (x = indent - 1; x >= 0; x--) {
+						for (x = indent; --x >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -809,7 +809,7 @@ namespace NanoJson {
 					int y;
 					if (pretty && !AsValue) {
 						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-						for (x = indent - 1; x >= 0; x--) {
+						for (x = indent; --x >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -836,7 +836,7 @@ namespace NanoJson {
 							if (!prior.IsNothing) {
 								if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)prior.Type)) {
 									NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-									for (y = indent - 1; y >= 0; y--) {
+									for (y = indent; --y >= 0;) {
 										indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 										sbPos += NanoJsonStatics.INDENT_LEN;
 									}
@@ -850,7 +850,7 @@ namespace NanoJson {
 						}
 						if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)current.Type)) {
 							NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-							for (y = indent - 1; y >= 0; y--) {
+							for (y = indent; --y >= 0;) {
 								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 								sbPos += NanoJsonStatics.INDENT_LEN;
 							}
@@ -860,7 +860,7 @@ namespace NanoJson {
 						sb[sbPos++] = '\n';
 
 						indent--;
-						for (x = indent - 1; x >= 0; x--) {
+						for (x = indent; --x >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -1550,7 +1550,7 @@ namespace NanoJson {
 			{
 				if (this.Type == JsonType.Object) {
 					int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
-					for (int x = this.InnerLength - 1; x >= 0; x--) {
+					for (int x = this.InnerLength; --x >= 0;) {
 						ref readonly JsonMemory value = ref this.InnerValues[x];
 						if (hash == value.KeyHash) {
 							return ref value;
@@ -1691,7 +1691,7 @@ namespace NanoJson {
 						for (x = 0; x < limit; x++) {
 							ref readonly JsonMemory value = ref this.InnerValues[x];
 							NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-							for (y = indent - 1; y >= 0; y--) {
+							for (y = indent; --y >= 0;) {
 								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 								sbPos += NanoJsonStatics.INDENT_LEN;
 							}
@@ -1709,7 +1709,7 @@ namespace NanoJson {
 						}
 						ref readonly JsonMemory valueLast = ref this.InnerValues[x];
 						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-						for (y = indent - 1; y >= 0; y--) {
+						for (y = indent; --y >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -1726,7 +1726,7 @@ namespace NanoJson {
 						sb[sbPos++] = '\n';
 
 						indent--;
-						for (x = indent - 1; x >= 0; x--) {
+						for (x = indent; --x >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -1765,7 +1765,7 @@ namespace NanoJson {
 					int y;
 					if (pretty && !AsValue) {
 						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-						for (x = indent - 1; x >= 0; x--) {
+						for (x = indent; --x >= 0;) {
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
@@ -1788,7 +1788,7 @@ namespace NanoJson {
 								ref readonly JsonMemory value = ref this.InnerValues[x];
 								if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)value.Type)) {
 									NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-									for (y = indent - 1; y >= 0; y--) {
+									for (y = indent; --y >= 0;) {
 										indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 										sbPos += NanoJsonStatics.INDENT_LEN;
 									}
@@ -1801,7 +1801,7 @@ namespace NanoJson {
 							ref readonly JsonMemory valueLast = ref this.InnerValues[x];
 							if (NanoJsonStatics.HasFlag((long)JsonType.Value, (long)valueLast.Type)) {
 								NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
-								for (y = indent - 1; y >= 0; y--) {
+								for (y = indent; --y >= 0;) {
 									indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 									sbPos += NanoJsonStatics.INDENT_LEN;
 								}
@@ -1811,7 +1811,7 @@ namespace NanoJson {
 							sb[sbPos++] = '\n';
 
 							indent--;
-							for (x = indent - 1; x >= 0; x--) {
+							for (x = indent; --x >= 0;) {
 								indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 								sbPos += NanoJsonStatics.INDENT_LEN;
 							}
@@ -2202,7 +2202,7 @@ namespace NanoJson {
 		public readonly bool TryGetKey(in ReadOnlySpan<char> key, out JsonMemory found) {
 			if (this.Type == JsonType.Object) {
 				int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
-				for (int x = this.InnerLength - 1; x >= 0; x--) {
+				for (int x = this.InnerLength; --x >= 0;) {
 					ref readonly JsonMemory value = ref this.InnerValues[x];
 					if (hash == value.KeyHash) {
 						found = value;
@@ -2238,7 +2238,7 @@ namespace NanoJson {
 		public readonly ref readonly JsonMemory TryGetKeyRef(ReadOnlySpan<char> key, out bool found) {
 			if (this.Type == JsonType.Object) {
 				int hash = NanoJsonStatics.ComputeHash(in key, out int pathLen);
-				for (int x = this.InnerLength - 1; x >= 0; x--) {
+				for (int x = this.InnerLength; --x >= 0;) {
 					ref readonly JsonMemory value = ref this.InnerValues[x];
 					if (hash == value.KeyHash) {
 						found = true;
@@ -2766,7 +2766,7 @@ namespace NanoJson {
 		public static int ComputeHash(in ReadOnlySpan<char> data, out int len) {
 			int hash = 17; // Initial hash value
 			len = data.Length;
-			for (int x = len - 1; x >= 0; x--) {
+			for (int x = len; --x >= 0;) {
 				hash = hash * 31 + data[x]; // Combine hash with character
 			}
 			return hash; // Return the final hash value
