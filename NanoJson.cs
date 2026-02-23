@@ -1230,7 +1230,7 @@ namespace NanoJson {
 					ReadComplete:
 					this.InnerValues = existingBuffer.AsSpan(bufferIndex, bufPos - bufferIndex).ToArray();
 					if (bufferSource) {
-						ArrayPool<JsonMemory>.Shared.Return(existingBuffer);
+						ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
 					}
 					return;
 				}
@@ -1345,7 +1345,7 @@ namespace NanoJson {
 					ReadComplete:
 					this.InnerValues = existingBuffer.AsSpan(bufferIndex, bufPos - bufferIndex).ToArray();
 					if (bufferSource) {
-						ArrayPool<JsonMemory>.Shared.Return(existingBuffer);
+						ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
 					}
 					return;
 				}
@@ -1834,9 +1834,24 @@ namespace NanoJson {
 		}
 
 		/// <summary>
-		/// Get the length of the reference area
+		/// Get the length of the reference area or if no reference is available, the combined internal GetLength values
 		/// </summary>
-		public readonly int GetLength => this.ReferenceData.Length;
+		public readonly int GetLength
+		{
+			get
+			{
+				if (this.ReferenceData.IsEmpty) {
+					int len = 0;
+					for (int x = this.InnerLength; --x >= 0;) {
+						len += this.InnerValues[x].GetLength;
+					}
+					return len;
+				}
+				else {
+					return this.ReferenceData.Length;
+				}
+			}
+		}
 
 		/// <summary>
 		/// Get the literal string value of the object
@@ -2710,11 +2725,27 @@ namespace NanoJson {
 		/// <param name="nextIndex"></param>
 		/// <param name="buffer"></param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void EnsureBufferCapacity<T>(int nextIndex, ref T[] buffer) {
+		public static void EnsureBufferCapacity(int nextIndex, ref char[] buffer) {
 			if (nextIndex >= buffer.Length) {
-				T[] newArray = ArrayPool<T>.Shared.Rent(nextIndex + 1);
+				char[] newArray = ArrayPool<char>.Shared.Rent(nextIndex + 1);
 				buffer.CopyTo(newArray.AsSpan());
-				ArrayPool<T>.Shared.Return(buffer);
+				ArrayPool<char>.Shared.Return(buffer);
+				buffer = newArray;
+			}
+		}
+
+		/// <summary>
+		/// <c>USES ARRAYPOOL ARRAYS</c>, do not insert normal arrays
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="nextIndex"></param>
+		/// <param name="buffer"></param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
+			if (nextIndex >= buffer.Length) {
+				JsonMemory[] newArray = ArrayPool<JsonMemory>.Shared.Rent(nextIndex + 1);
+				buffer.CopyTo(newArray.AsSpan());
+				ArrayPool<JsonMemory>.Shared.Return(buffer, true); // Release memory references
 				buffer = newArray;
 			}
 		}
