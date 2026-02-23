@@ -1666,8 +1666,8 @@ namespace NanoJson {
 					int x;
 					int y;
 					if (pretty && !AsValue) {
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + (NanoJsonStatics.INDENT_LEN * indent), ref sb);
 						for (x = indent - 1; x >= 0; x--) {
-							NanoJsonStatics.EnsureBufferCapacity(sbPos + NanoJsonStatics.INDENT_LEN, ref sb);
 							indentSpan.CopyTo(sb.AsSpan(sbPos, NanoJsonStatics.INDENT_LEN));
 							sbPos += NanoJsonStatics.INDENT_LEN;
 						}
