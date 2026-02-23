@@ -19,7 +19,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace NanoJson {
-
+	
 	#region ### JsonSpan ###
 
 	public readonly ref struct JsonSpan {
@@ -247,10 +247,6 @@ namespace NanoJson {
 							}
 						}
 					default:
-						if (this.index == -1) {
-							this.index = 0;
-							return true;
-						}
 						return false;
 				}
 			}
@@ -783,7 +779,7 @@ namespace NanoJson {
 								sb[sbPos++] = '"';
 								NanoJsonStatics.EnsureBufferCapacity(sbPos + prior.GetKeyLen + 3, ref sb);
 								prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
-								sbPos += prior.GetLength;
+								sbPos += prior.GetKeyLen;
 								sb[sbPos++] = '"';
 								sb[sbPos++] = ':';
 								sb[sbPos++] = ' ';
@@ -795,7 +791,7 @@ namespace NanoJson {
 						}
 						sb[sbPos++] = '"';
 						NanoJsonStatics.EnsureBufferCapacity(sbPos + current.GetKeyLen + 3, ref sb);
-						current.Value.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
+						current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
 						sbPos += current.GetKeyLen;
 						sb[sbPos++] = '"';
 						sb[sbPos++] = ':';
@@ -882,10 +878,7 @@ namespace NanoJson {
 						current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref sb, ref indent, ref sbPos, in indentSpan);
 					}
 
-					NanoJsonStatics.EnsureBufferCapacity(sbPos + 2, ref sb);
-					if (pretty) {
-						sb[sbPos++] = ' ';
-					}
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + 1, ref sb);
 					sb[sbPos++] = ']';
 					return;
 				}

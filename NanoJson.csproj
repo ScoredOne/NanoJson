@@ -25,6 +25,12 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <Compile Remove="NanoJson_UnitTests\**" />
+    <EmbeddedResource Remove="NanoJson_UnitTests\**" />
+    <None Remove="NanoJson_UnitTests\**" />
+  </ItemGroup>
+  
+  <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
     <None Include="LICENSE.txt" Pack="true" PackagePath="\" />
   </ItemGroup>
