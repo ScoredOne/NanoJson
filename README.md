@@ -15,39 +15,40 @@ Theory:
 
 // * Summary *
 
-BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6937/22H2/2022Update)
-AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores
-.NET SDK 9.0.307
-  [Host]   : .NET 5.0.17 (5.0.1722.21314), X64 RyuJIT AVX2 [AttachedDebugger]
+BenchmarkDotNet v0.15.2, Windows 10 (10.0.19045.6937/22H2/2022Update)   
+AMD Ryzen 9 5950X 3.50GHz, 1 CPU, 16 logical and 16 physical cores   
+.NET SDK 9.0.307   
+  [Host]   : .NET 5.0.17 (5.0.1722.21314), X64 RyuJIT AVX2 [AttachedDebugger]   
   .NET 9.0 : .NET 9.0.11 (9.0.1125.51716), X64 RyuJIT AVX2 <br>
 
 Job=.NET 9.0  Runtime=.NET 9.0
 
 | Method                   | format             | Mean          | Error        | StdDev       | Gen0    | Gen1    | Gen2    | Allocated |
 |------------------------- |------------------- |--------------:|-------------:|-------------:|--------:|--------:|--------:|----------:|
-| NanoJson_JsonSpan*       | JustParse          |      33.57 ns |     0.028 ns |     0.025 ns |       - |       - |       - |         - |
-| NanoJson_JsonMemory      | JustParse          | 241,214.67 ns | 1,626.939 ns | 1,442.239 ns |  4.3945 |  0.4883 |       - |   74928 B |
-| System.Text.Json         | JustParse          | 135,288.05 ns |   156.955 ns |   131.064 ns |  5.6152 |  0.4883 |       - |   95696 B |
-| LightJson                | JustParse          | 338,335.19 ns | 1,570.335 ns | 1,468.892 ns | 32.2266 | 14.1602 |       - |  542440 B |
-| NewtonsoftJson           | JustParse          | 504,082.22 ns | 2,872.296 ns | 2,398.497 ns | 36.1328 | 25.3906 |       - |  618136 B |
+| NanoJson_JsonSpan*       | JustParse          |      32.24 ns |     0.010 ns |     0.008 ns |       - |       - |       - |         - |
+| NanoJson_JsonMemory      | JustParse          | 111,541.05 ns |   499.438 ns |   417.053 ns |  4.3945 |  0.4883 |       - |   74928 B |
+| SystemTextJson           | JustParse          | 137,323.25 ns |   496.235 ns |   464.179 ns |  5.6152 |  0.4883 |       - |   95696 B |
+| LightJson                | JustParse          | 333,096.58 ns | 3,251.092 ns | 3,041.074 ns | 32.2266 | 14.1602 |       - |  542440 B |
+| NewtonsoftJson           | JustParse          | 453,760.88 ns | 3,189.760 ns | 2,983.704 ns | 36.6211 | 26.3672 |       - |  618136 B |
 |                          |                    |               |              |              |         |         |         |           |
-| NanoJson_JsonSpan        | ParseToString      | 494,223.63 ns | 2,135.551 ns | 1,997.596 ns | 30.2734 | 30.2734 | 30.2734 |   95674 B |
-| NanoJson_JsonMemory      | ParseToString      | 386,639.30 ns | 2,341.740 ns | 2,075.891 ns | 30.2734 | 30.2734 | 30.2734 |  170588 B |
-| System.Text.Json         | ParseToString      | 256,067.47 ns | 1,815.913 ns | 1,609.759 ns | 27.3438 | 27.3438 | 27.3438 |  183708 B |
-| LightJson                | ParseToString      | 500,614.54 ns | 3,644.779 ns | 3,409.328 ns | 41.9922 | 20.5078 |       - |  714936 B |
-| NewtonsoftJson           | ParseToString      | 636,750.81 ns | 2,468.194 ns | 2,308.750 ns | 54.6875 | 53.7109 | 27.3438 |  804049 B |
+| NanoJson_JsonSpan        | ParseToString      | 468,709.76 ns |   968.156 ns |   858.246 ns | 30.2734 | 30.2734 | 30.2734 |   95650 B |
+| NanoJson_JsonMemory      | ParseToString      | 242,663.77 ns | 2,748.266 ns | 2,436.266 ns | 30.2734 | 30.2734 | 30.2734 |  170599 B |
+| SystemTextJson           | ParseToString      | 255,308.27 ns | 4,127.349 ns | 3,658.787 ns | 27.3438 | 27.3438 | 27.3438 |  183708 B |
+| LightJson                | ParseToString      | 502,897.70 ns | 4,430.701 ns | 4,144.481 ns | 41.9922 | 20.5078 |       - |  714936 B |
+| NewtonsoftJson           | ParseToString      | 626,962.83 ns | 7,376.277 ns | 6,899.774 ns | 54.6875 | 53.7109 | 27.3438 |  804049 B |
 |                          |                    |               |              |              |         |         |         |           |
-| NanoJson_JsonSpan**      | ParseReformat      | 440,311.67 ns | 1,899.435 ns | 1,683.800 ns |  5.8594 |  0.4883 |       - |  105744 B |
-| NanoJson_JsonMemory      | ParseReformat      | 323,021.04 ns | 6,389.027 ns | 6,274.879 ns |  9.7656 |  1.9531 |       - |  166680 B |
-| System.Text.Json         | ParseReformat      | 313,285.68 ns | 2,553.895 ns | 2,132.618 ns | 23.4375 |  9.7656 |       - |  415664 B |
-| LightJson                | ParseReformat      | 453,900.13 ns | 3,647.930 ns | 3,046.186 ns | 42.9688 | 18.0664 |       - |  725168 B |
-| NewtonsoftJson           | ParseReformat      | 632,137.40 ns | 6,303.847 ns | 5,896.622 ns | 54.6875 | 26.3672 |       - |  930152 B |
+| NanoJson_JsonSpan**      | ParseReformat      | 401,155.84 ns | 2,732.017 ns | 2,421.861 ns |  5.8594 |  0.4883 |       - |  105744 B |
+| NanoJson_JsonMemory      | ParseReformat      | 183,844.80 ns | 1,216.908 ns | 1,138.296 ns |  9.7656 |  1.2207 |       - |  166688 B |
+| SystemTextJson           | ParseReformat      | 315,704.06 ns | 3,581.738 ns | 2,990.913 ns | 23.4375 |  9.7656 |       - |  415664 B |
+| LightJson                | ParseReformat      | 471,427.29 ns | 5,288.662 ns | 4,947.018 ns | 42.9688 | 18.0664 |       - |  725168 B |
+| NewtonsoftJson           | ParseReformat      | 668,827.49 ns | 6,130.534 ns | 5,734.506 ns | 54.6875 | 26.3672 |       - |  930152 B |
 |                          |                    |               |              |              |         |         |         |           |
-| NanoJson_JsonSpan        | ParseToSingleValue |  40,851.67 ns |   138.109 ns |   129.187 ns |       - |       - |       - |      56 B |
-| NanoJson_JsonMemory      | ParseToSingleValue | 224,043.80 ns | 4,447.696 ns | 4,758.985 ns |  4.3945 |  0.4883 |       - |   74984 B |
-| System.Text.Json         | ParseToSingleValue | 137,499.61 ns |   411.618 ns |   343.719 ns |  5.8594 |  0.9766 |       - |   99968 B |
-| LightJson                | ParseToSingleValue | 334,460.62 ns | 1,935.745 ns | 1,810.697 ns | 32.2266 | 14.1602 |       - |  542440 B |
-| NewtonsoftJson           | ParseToSingleValue | 460,828.79 ns | 4,095.251 ns | 3,830.700 ns | 36.6211 | 26.3672 |       - |  618136 B |
+| NanoJson_JsonSpan        | ParseToSingleValue |  43,336.24 ns |    61.495 ns |    54.514 ns |       - |       - |       - |      56 B |
+| NanoJson_JsonMemory      | ParseToSingleValue | 113,700.75 ns |   779.726 ns |   729.356 ns |  4.3945 |  0.4883 |       - |   74984 B |
+| SystemTextJson           | ParseToSingleValue | 142,864.35 ns |   613.395 ns |   543.758 ns |  5.8594 |  0.9766 |       - |   99968 B |
+| LightJson                | ParseToSingleValue | 348,184.74 ns | 1,754.150 ns | 1,464.795 ns | 32.2266 | 14.1602 |       - |  542440 B |
+| NewtonsoftJson           | ParseToSingleValue | 507,002.10 ns | 5,379.898 ns | 5,032.360 ns | 36.1328 | 25.3906 |       - |  618136 B |
+
 
 *JsonSpan doesnt parse on data insersion. Hence the results of JustParse.
 **JsonSpan as it cant store the nodes, parses and reads the nodes as JsonSpan then pins them to memory as JsonMemory before running ToString

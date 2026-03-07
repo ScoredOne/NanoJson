@@ -16,7 +16,9 @@
 
 using System;
 using System.Buffers;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NanoJson {
 
@@ -1153,137 +1155,226 @@ namespace NanoJson {
 		private readonly ReadOnlyMemory<char> ReferenceData;
 		private readonly ReadOnlyMemory<char> KeyData;
 
-		private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> reference, ref JsonMemory[] existingBuffer, int bufferIndex) {
-			this.KeyData = key;
+		private const ushort QUOTE = '"';
+		private const ushort LBRACKET = '[';
+		private const ushort RBRACKET = ']';
+		private const ushort LBRACE = '{';
+		private const ushort RBRACE = '}';
+		private const ushort COLON = ':';
+		private const ushort COMMA = ',';
+		private const ushort T_LOWER = 't';
+		private const ushort T_UPPER = 'T';
+		private const ushort F_LOWER = 'f';
+		private const ushort F_UPPER = 'F';
+		private const ushort N_LOWER = 'n';
+		private const ushort N_UPPER = 'N';
+		private const ushort E_LOWER = 'e';
+		private const ushort E_UPPER = 'E';
+		private const ushort U_LOWER = 'u';
+		private const ushort U_UPPER = 'U';
+		private const ushort L_LOWER = 'l';
+		private const ushort L_UPPER = 'L';
+		private const ushort R_LOWER = 'r';
+		private const ushort R_UPPER = 'R';
+		private const ushort A_LOWER = 'a';
+		private const ushort A_UPPER = 'A';
+		private const ushort S_LOWER = 's';
+		private const ushort S_UPPER = 'S';
+
+		private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> reference, ref JsonReader reader, ref JsonMemory[] existingBuffer, int bufferIndex) {
 			if (reference.IsEmpty) {
-				this.Type = JsonType.Null;
-				this.ReferenceData = ReadOnlyMemory<char>.Empty;
-				this.InnerValues = Array.Empty<JsonMemory>();
+				this = JsonMemory.Empty;
+				this.KeyData = key;
 				return;
 			}
-			int len = reference.Length;
-			int x = -1;
-			ReadOnlySpan<char> data = reference.Span;
-			while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
-			while (NanoJsonStatics.IsWhiteSpace(data[--len])) { }
-			len++;
-			switch (data[x]) {
-				case '"': {
+			this.KeyData = key;
+
+			ushort first;
+			if (reader.CurrentIndex < 0 || NanoJsonStatics.IsWhiteSpace(reader.CurrentChar)) {
+				first = reader.AdvanceToNotWhiteSpace();
+			}
+			else {
+				first = reader.CurrentChar;
+			}
+
+			switch (first) {
+				case QUOTE: {
 					this.Type = JsonType.String;
 					this.InnerValues = Array.Empty<JsonMemory>();
+					int left = reader.CurrentIndex + 1;
+					int right = reader.AdvanceTo(QUOTE);
 
-					while (true) {
-						if (data[--len] == '"') {
-							break;
-						}
-					}
-					if (len == ++x) {
+					if ((right ^ left) == 0) {
 						this.ReferenceData = ReadOnlyMemory<char>.Empty;
 					}
 					else {
-						this.ReferenceData = reference.Slice(x, len - x);
+						this.ReferenceData = reference.Slice(left, right - left);
 					}
 					return;
 				}
-				case '[': {
+				case LBRACKET: {
 					this.Type = JsonType.Array;
-					len -= x;
-					this.ReferenceData = reference.Slice(x, len);
-					data = this.ReferenceData.Span;
-
-					while (true) {
-						if (data[--len] == ']') {
-							break;
-						}
-					}
-					x = 0;
-					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
-					if (x == len) {
+					int left = reader.CurrentIndex;
+					if (reader.AdvanceToNotWhiteSpace() == RBRACKET) {
 						this.InnerValues = Array.Empty<JsonMemory>();
+						this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
 						return;
 					}
+					int refStart = left;
 
-					bool bufferSource = false;
+					bool bufferSource;
 					if (existingBuffer == null) {
 						existingBuffer = ArrayPool<JsonMemory>.Shared.Rent(16);
 						bufferSource = true;
 					}
 					else {
+						bufferSource = false;
 						NanoJsonStatics.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
 					}
 
-					int depth = 0;
 					int bufPos = bufferIndex;
 					int bTemp;
-					int left = 1;
-					int right = 1;
+
 					JsonMemory newValue;
 					while (true) {
-						switch (data[right]) {
-							case '"':
-								while (true) {
-									if (data[++right] == '"') {
-										break;
+						left = reader.CurrentIndex;
+						ushort leftChar = reader.CurrentChar;
+
+						switch (leftChar) {
+							case QUOTE: {
+								reader.AdvanceTo(QUOTE);
+								int r = reader.CurrentIndex + 1;
+								ushort advance = reader.AdvanceToCommaOrEndBrace();
+								bTemp = bufPos;
+								newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
+								++bufPos;
+								NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+								existingBuffer[bTemp] = newValue;
+								if (advance == COMMA) {
+									reader.AdvanceToNotWhiteSpace();
+									continue;
+								}
+								else if (advance == RBRACKET) {
+									goto ReadComplete;
+								}
+								throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+							}
+							case LBRACE:
+							case LBRACKET: {
+								bTemp = bufPos;
+								newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
+								NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+								existingBuffer[bTemp] = newValue;
+								if (reader.AdvanceToCommaOrEndBrace() == RBRACKET) {
+									goto ReadComplete;
+								}
+								reader.AdvanceToNotWhiteSpace();
+								continue;
+							}
+							default: {
+								ushort advanced = reader.AdvanceToCommaOrEndBrace();
+								int continuation = reader.CurrentIndex + 1;
+								reader.RetreatToNotWhiteSpace();
+								reader.Increment();
+								bTemp = bufPos;
+								ReadOnlySpan<char> data = reference.Span;
+								switch (leftChar) {
+									case N_LOWER:
+									case N_UPPER: {
+										if ((reader.CurrentIndex - left) == 4) {
+											char c = data[left + 1];
+											if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+														newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Null, NanoJsonStatics.NULL.AsMemory());
+														break;
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									case T_LOWER:
+									case T_UPPER: {
+										if ((reader.CurrentIndex - left) == 4) {
+											char c = data[left + 1];
+											if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+														newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.TrueString.AsMemory());
+														break;
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									case F_LOWER:
+									case F_UPPER: {
+										if ((reader.CurrentIndex - left) == 5) {
+											char c = data[left + 1];
+											if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
+														c = data[left + 4];
+														if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+															newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.FalseString.AsMemory());
+															break;
+														}
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									default: {
+										ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
+										if (NanoJsonStatics.IsNumber(numberArea.Span)) {
+											newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Number, numberArea);
+											break;
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 									}
 								}
-								break;
-							case '{':
-							case '[':
-								depth++;
-								break;
-							case '}':
-								depth--;
-								break;
-							case ']':
-								if (depth == 0) {
-									bTemp = bufPos;
-									newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
+
+								++bufPos;
+								NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+								reader.SetIndexPosition(continuation);
+								existingBuffer[bTemp] = newValue;
+								if (advanced == RBRACKET) {
 									existingBuffer[bTemp] = newValue;
 									goto ReadComplete;
 								}
-								depth--;
-								break;
-							case ',':
-								if (depth == 0) {
-									bTemp = bufPos;
-									newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
-									existingBuffer[bTemp] = newValue;
-									left = ++right;
-									NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
-									continue;
-								}
-								break;
+								reader.AdvanceToNotWhiteSpace();
+								continue;
+							}
 						}
-						right++;
 					}
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 					ReadComplete:
 					this.InnerValues = existingBuffer.AsSpan(bufferIndex, bufPos - bufferIndex).ToArray();
 					if (bufferSource) {
 						ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
 					}
+					this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
 					return;
 				}
-				case '{': {
+				case LBRACE: {
 					this.Type = JsonType.Object;
-					len -= x;
-					this.ReferenceData = reference.Slice(x, len);
-					data = this.ReferenceData.Span;
-
-					while (true) {
-						if (data[--len] == '}') {
-							break;
-						}
-					}
-
-					if (len <= 0) {
-						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-					}
-					x = 0;
-					while (NanoJsonStatics.IsWhiteSpace(data[++x])) { }
-					if (x == len) {
+					int left = reader.CurrentIndex;
+					if (reader.AdvanceToNotWhiteSpace() == RBRACE) {
 						this.InnerValues = Array.Empty<JsonMemory>();
+						this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
 						return;
 					}
+					int refStart = left;
+
 					bool bufferSource = false;
 					if (existingBuffer == null) {
 						existingBuffer = ArrayPool<JsonMemory>.Shared.Rent(16);
@@ -1293,83 +1384,148 @@ namespace NanoJson {
 						NanoJsonStatics.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
 					}
 
-					int depth = 0;
 					int bufPos = bufferIndex;
 					int bTemp;
-					int left = 1;
-					int right = 1;
-					int nameL = 0;
-					int nameR = 0;
+					int nameL;
+					int nameR;
 					JsonMemory newValue;
 
 					while (true) {
-						while (true) {
-							if (data[right] == '"') {
-								break;
-							}
-							right++;
+						if (reader.CurrentChar != QUOTE) {
+							reader.AdvanceTo(QUOTE);
 						}
-						if (data[++right] == '"') {
+						nameL = reader.CurrentIndex + 1;
+						reader.AdvanceTo(QUOTE);
+						nameR = reader.CurrentIndex - nameL;
+						if (nameR == 1) {
 							nameL = 0;
 							nameR = 0;
 						}
-						else {
-							nameL = right;
-							while (true) {
-								if (data[++right] == '"') {
-									break;
+						do {
+							reader.Increment();
+						} while (reader.CurrentChar == COLON);
+						reader.AdvanceToNotWhiteSpace();
+						left = reader.CurrentIndex;
+						ushort leftChar = reader.CurrentChar;
+
+						switch (leftChar) {
+							case QUOTE: {
+								left++;
+								reader.AdvanceTo(QUOTE);
+								int r = reader.CurrentIndex;
+								ushort advance = reader.AdvanceToCommaOrEndBrace();
+								bTemp = bufPos;
+								newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
+								++bufPos;
+								NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+								existingBuffer[bTemp] = newValue;
+								if (advance == COMMA) {
+									reader.Increment();
+									goto NextObject;
 								}
+								else if (advance == RBRACE) {
+									goto ReadComplete;
+								}
+								throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 							}
-							nameR = right - nameL;
-						}
-
-						while (true) {
-							if (data[++right] == ':') {
-								break;
+							case LBRACE:
+							case LBRACKET: {
+								bTemp = bufPos;
+								newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
+								existingBuffer[bTemp] = newValue;
+								switch (reader.AdvanceToCommaOrEndBrace()) {
+									case RBRACKET:
+										goto ReadComplete;
+									case COMMA:
+										continue;
+								}
+								continue;
 							}
-						}
-						while (NanoJsonStatics.IsWhiteSpace(data[++right])) { }
-						left = right;
-
-						while (true) {
-							switch (data[right]) {
-								case '"':
-									while (true) {
-										if (data[++right] == '"') {
+							default: {
+								ushort advanced = reader.AdvanceToCommaOrEndBrace();
+								int continuation = reader.CurrentIndex + 1;
+								reader.RetreatToNotWhiteSpace();
+								reader.Increment();
+								bTemp = bufPos;
+								ReadOnlySpan<char> data = reference.Span;
+								switch (leftChar) {
+									case N_LOWER:
+									case N_UPPER: {
+										if ((reader.CurrentIndex - left) == 4) {
+											char c = data[left + 1];
+											if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+														newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Null, NanoJsonStatics.NULL.AsMemory());
+														break;
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									case T_LOWER:
+									case T_UPPER: {
+										if ((reader.CurrentIndex - left) == 4) {
+											char c = data[left + 1];
+											if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+														newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.TrueString.AsMemory());
+														break;
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									case F_LOWER:
+									case F_UPPER: {
+										if ((reader.CurrentIndex - left) == 5) {
+											char c = data[left + 1];
+											if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
+												c = data[left + 2];
+												if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+													c = data[left + 3];
+													if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
+														c = data[left + 4];
+														if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+															newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.FalseString.AsMemory());
+															break;
+														}
+													}
+												}
+											}
+										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+									}
+									default: {
+										ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
+										if (NanoJsonStatics.IsNumber(numberArea.Span)) {
+											newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Number, numberArea);
 											break;
 										}
+										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 									}
-									break;
-								case '{':
-								case '[':
-									depth++;
-									break;
-								case ']':
-									depth--;
-									break;
-								case '}':
-									if (depth == 0) { // no comma found, process last segment
-										bTemp = bufPos;
-										newValue = new JsonMemory(this.ReferenceData.Slice(nameL, nameR), this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
-										existingBuffer[bTemp] = newValue;
-										goto ReadComplete;
-									}
-									depth--;
-									break;
-								case ',':
-									if (depth == 0) {
-										goto NextObject;
-									}
-									break;
-							}
-							right++;
-						}
 
+								}
+								++bufPos;
+								NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+								reader.SetIndexPosition(continuation);
+								existingBuffer[bTemp] = newValue;
+								if (advanced == RBRACE) {
+									goto ReadComplete;
+								}
+								continue;
+							}
+						}
+						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 						NextObject:
-						bTemp = bufPos;
-						newValue = new JsonMemory(this.ReferenceData.Slice(nameL, nameR), this.ReferenceData.Slice(left, right - left), ref existingBuffer, ++bufPos);
-						existingBuffer[bTemp] = newValue;
-						NanoJsonStatics.EnsureBufferCapacity(bufPos, ref existingBuffer);
+						continue;
 					}
 
 					ReadComplete:
@@ -1377,136 +1533,90 @@ namespace NanoJson {
 					if (bufferSource) {
 						ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
 					}
+					this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
 					return;
 				}
-				case 'n':
-				case 'N': {
+				case N_LOWER:
+				case N_UPPER: {
 					this.Type = JsonType.Null;
 					this.InnerValues = Array.Empty<JsonMemory>();
-					if ((len - x) == 4) {
-						char c = data[++x];
-						if (c == 'u' || c == 'U') {
-							c = data[++x];
-							if (c == 'l' || c == 'L') {
-								c = data[++x];
-								if (c == 'l' || c == 'L') {
-									this.ReferenceData = NanoJsonStatics.NULL.AsMemory();
+					reader.Increment();
+					ushort c = reader.CurrentChar;
+					if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+						reader.Increment();
+						c = reader.CurrentChar;
+						if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+							reader.Increment();
+							c = reader.CurrentChar;
+							if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+								this.ReferenceData = NanoJsonStatics.NULL.AsMemory();
+								return;
+							}
+						}
+					}
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+				}
+				case T_LOWER:
+				case T_UPPER: {
+					this.Type = JsonType.Boolean;
+					this.InnerValues = Array.Empty<JsonMemory>();
+					reader.Increment();
+					ushort c = reader.CurrentChar;
+					if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
+						reader.Increment();
+						c = reader.CurrentChar;
+						if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+							reader.Increment();
+							c = reader.CurrentChar;
+							if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+								this.ReferenceData = bool.TrueString.AsMemory();
+								return;
+							}
+						}
+					}
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
+				}
+				case F_LOWER:
+				case F_UPPER: {
+					this.Type = JsonType.Boolean;
+					this.InnerValues = Array.Empty<JsonMemory>();
+					reader.Increment();
+					ushort c = reader.CurrentChar;
+					if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
+						reader.Increment();
+						c = reader.CurrentChar;
+						if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+							reader.Increment();
+							c = reader.CurrentChar;
+							if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
+								reader.Increment();
+								c = reader.CurrentChar;
+								if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+									this.ReferenceData = bool.FalseString.AsMemory();
 									return;
 								}
 							}
 						}
 					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
+					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()})", nameof(reference));
 				}
-				case 't':
-				case 'T': {
-					this.Type = JsonType.Boolean;
-					this.InnerValues = Array.Empty<JsonMemory>();
-					if ((len - x) == 4) {
-						char c = data[++x];
-						if (c == 'r' || c == 'R') {
-							c = data[++x];
-							if (c == 'u' || c == 'U') {
-								c = data[++x];
-								if (c == 'e' || c == 'E') {
-									this.ReferenceData = bool.TrueString.AsMemory();
-									return;
-								}
-							}
-						}
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-				}
-				case 'f':
-				case 'F': {
-					this.Type = JsonType.Boolean;
-					this.InnerValues = Array.Empty<JsonMemory>();
-					if ((len - x) == 5) {
-						char c = data[++x];
-						if (c == 'a' || c == 'A') {
-							c = data[++x];
-							if (c == 'l' || c == 'L') {
-								c = data[++x];
-								if (c == 's' || c == 'S') {
-									c = data[++x];
-									if (c == 'e' || c == 'E') {
-										this.ReferenceData = bool.FalseString.AsMemory();
-										return;
-									}
-								}
-							}
-						}
-					}
-
-					throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-				}
-				case '+':
-				case '-':
-				case '0':
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-				case '8':
-				case '9': {
+				default: {
+					int left = reader.CurrentIndex;
+					reader.AdvanceToCommaOrEndBrace();
+					int right = reader.CurrentIndex;
 					this.Type = JsonType.Number;
 					this.InnerValues = Array.Empty<JsonMemory>();
 
-					bool dec = false;
-					bool E = false;
-
-					len -= x;
-					this.ReferenceData = reference.Slice(x, len);
-					x = 0; // We already know pos 0 to get here
-					while (++x < len) {
-						switch (data[x]) {
-							case '0':
-							case '1':
-							case '2':
-							case '3':
-							case '4':
-							case '5':
-							case '6':
-							case '7':
-							case '8':
-							case '9':
-								continue;
-							case '.':
-								if (dec) {
-									throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-								}
-								dec = true;
-								continue;
-							case 'e':
-							case 'E':
-								if (E) {
-									throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-								}
-								else {
-									char c = data[++x];
-									if (c == '+' || c == '-') {
-										E = true;
-										continue;
-									}
-									else {
-										throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-									}
-								}
-							default:
-								throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {data.ToString()})", nameof(reference));
-						}
+					this.ReferenceData = reference.Slice(left, right - left);
+					if (!NanoJsonStatics.IsNumber(this.ReferenceData.Span)) {
+						throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.ReferenceData.ToString()})", nameof(reference));
 					}
 					return;
 				}
 			}
-			throw new ArgumentException($"Parse failed (TryParse: {data.ToString()})", nameof(reference));
-		}
 
+			throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()})", nameof(reference));
+		}
 		private JsonMemory(in JsonType type, params JsonMemory[] contents) : this(ReadOnlyMemory<char>.Empty, type, contents) { }
 
 		private JsonMemory(in ReadOnlyMemory<char> key, JsonType type, params JsonMemory[] contents) {
@@ -1551,10 +1661,21 @@ namespace NanoJson {
 			this.InnerValues = Array.Empty<JsonMemory>();
 		}
 
-		private JsonMemory(in ReadOnlyMemory<char> key, in string value) {
+		private JsonMemory(in ReadOnlyMemory<char> key, in string value) : this(key, value.AsMemory()) { }
+		private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> value) {
 			this.KeyData = key;
 			this.Type = JsonType.String;
-			this.ReferenceData = value.AsMemory();
+			this.ReferenceData = value;
+			this.InnerValues = Array.Empty<JsonMemory>();
+		}
+
+		private JsonMemory(in ReadOnlyMemory<char> key, JsonType overridingType, in ReadOnlyMemory<char> value) {
+			if (NanoJsonStatics.HasFlag((long)JsonType.Container, (long)overridingType)) {
+				throw new ArgumentException("A container cannot be set with the override", nameof(overridingType));
+			}
+			this.KeyData = key;
+			this.Type = overridingType;
+			this.ReferenceData = value;
 			this.InnerValues = Array.Empty<JsonMemory>();
 		}
 
@@ -1624,6 +1745,14 @@ namespace NanoJson {
 		public readonly override string ToString() => this.ToString(NanoJsonStatics.Default_ToStringFormat);
 
 		public readonly string ToString(ToStringFormat format) {
+			static int RecursiveCount(in JsonMemory value) {
+				int counter = value.InnerLength;
+				for (int x = 0; x < value.InnerLength; x++) {
+					counter += RecursiveCount(value[x]);
+				}
+				return counter;
+			}
+
 			int indent = 0;
 			int pos = 0;
 
@@ -1631,7 +1760,10 @@ namespace NanoJson {
 			bool translateUnicode = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
 			bool lowerCaseBool = NanoJsonStatics.HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
 
-			char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength + 1); // 0 returns empty array?
+			int objectCount = RecursiveCount(this);
+			int estimatedCapacity = this.GetLength + objectCount * 5 + (pretty ? (objectCount * NanoJsonStatics.INDENT_LEN * 2) : 0) + 64;
+
+			char[] buffer = ArrayPool<char>.Shared.Rent(estimatedCapacity); // 0 returns empty array?
 			this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, ref buffer, ref indent, ref pos, NanoJsonStatics.INDENT_TABS.AsSpan());
 			string builtString = buffer.AsSpan().Slice(0, pos).ToString();
 			ArrayPool<char>.Shared.Return(buffer);
@@ -1664,26 +1796,38 @@ namespace NanoJson {
 					return;
 				}
 				case JsonType.Number: {
-					NanoJsonStatics.EnsureBufferCapacity(sbPos + 32, ref sb);
-					this.GetNumber.TryFormat(sb.AsSpan(sbPos), out int refSpanLen);
-					sbPos += refSpanLen;
+					ReadOnlySpan<char> numberSpan = this.GetValueAsSpan;
+					NanoJsonStatics.EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
+					numberSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
+					sbPos += this.GetLength;
 					return;
 				}
 				case JsonType.Boolean: {
 					ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
-					NanoJsonStatics.EnsureBufferCapacity(sbPos + 5, ref sb);
-					refSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
+					int len = this.GetLength;
 					if (lowerCaseBool) {
-						switch (refSpan[0]) {
-							case 'F':
-								sb[sbPos] = 'f';
-								break;
-							case 'T':
-								sb[sbPos] = 't';
-								break;
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + len, ref sb);
+						// write lowercase first char
+						char first = refSpan[0];
+						if (first == 'T') {
+							sb[sbPos++] = 't';
+						}
+						else if (first == 'F') {
+							sb[sbPos++] = 'f';
+						}
+						else {
+							sb[sbPos++] = first;
+						}
+						if (len-- > 1) {
+							refSpan.Slice(1).CopyTo(sb.AsSpan(sbPos, len));
+							sbPos += len;
 						}
 					}
-					sbPos += this.GetLength;
+					else {
+						NanoJsonStatics.EnsureBufferCapacity(sbPos + len, ref sb);
+						refSpan.CopyTo(sb.AsSpan(sbPos, len));
+						sbPos += len;
+					}
 					return;
 				}
 				case JsonType.Object: {
@@ -1943,73 +2087,8 @@ namespace NanoJson {
 			get
 			{
 				double returnNumber = double.NaN;
-				if (this.GetLength > 0 && NanoJsonStatics.HasFlag((long)this.Type, (long)JsonType.Number)) {
-					ReadOnlySpan<char> data = this.GetValueAsSpan;
-					int len = this.GetLength;
-					int pos = 0;
-
-					// handle sign
-					char c = data[pos];
-					bool negative = c == '-';
-					if (negative || c == '+') {
-						pos++;
-					}
-
-					// find 'e' or 'E' for exponent (if any)
-					int eIndex = -1;
-					for (int x = pos; x < len; x++) {
-						c = data[x];
-						if (c == 'e' || c == 'E') {
-							eIndex = x;
-							break;
-						}
-					}
-
-					// main part (integer + fractional) excludes exponent
-					ReadOnlySpan<char> mainSpan = eIndex > 0 ? data.Slice(pos, eIndex - pos) : data.Slice(pos);
-
-					// parse integer and fractional parts precisely
-					double value = 0.0d;
-					bool seenDecimal = false;
-					double fracDiv = 1.0;
-					for (int x = 0; x < mainSpan.Length; x++) {
-						c = mainSpan[x];
-						if (c == '.') {
-							seenDecimal = true;
-							continue;
-						}
-						int digit = NanoJsonStatics.ReadHexNumber(c); // expects '0'..'9'
-						if (!seenDecimal) {
-							value = value * 10.0 + digit;
-						}
-						else {
-							fracDiv *= 10.0;
-							value += digit / fracDiv;
-						}
-					}
-
-					// parse exponent (if present) and apply
-					if (eIndex > 0) {
-						int expPos = eIndex + 1;
-						bool expNegative = false;
-						if (expPos < len) {
-							char ec = data[expPos];
-							expNegative = ec == '-';
-							if (expNegative || ec == '+') {
-								expPos++;
-							}
-						}
-						int expVal = 0;
-						for (int x = expPos; x < len; x++) {
-							expVal = expVal * 10 + NanoJsonStatics.ReadHexNumber(data[x]);
-						}
-						if (expNegative) {
-							expVal = -expVal;
-						}
-						value *= Math.Pow(10.0, expVal);
-					}
-
-					returnNumber = negative ? -value : value;
+				if (NanoJsonStatics.HasFlag((long)this.Type, (long)JsonType.Number)) {
+					returnNumber = NanoJsonStatics.ParseNumber(this.GetValueAsSpan);
 				}
 				return returnNumber;
 			}
@@ -2360,8 +2439,11 @@ namespace NanoJson {
 				if (data.Span.Trim().IsEmpty) {
 					return JsonMemory.CreateNull(key);
 				}
-				JsonMemory[] buffer = Array.Empty<JsonMemory>();
-				return new JsonMemory(in key, in data, ref buffer, 0);
+				JsonMemory[] buffer = null;
+				JsonReader reader = new JsonReader(data.Span);
+				JsonMemory parsed = new JsonMemory(in key, in data, ref reader, ref buffer, 0);
+				reader.Dispose();
+				return parsed;
 			}
 		}
 
@@ -2395,8 +2477,11 @@ namespace NanoJson {
 			if (data.Span.Trim().IsEmpty) {
 				return JsonMemory.Empty;
 			}
-			JsonMemory[] buffer = Array.Empty<JsonMemory>();
-			return new JsonMemory(ReadOnlyMemory<char>.Empty, in data, ref buffer, 0);
+			JsonMemory[] buffer = null;
+			JsonReader reader = new JsonReader(data.Span);
+			JsonMemory parsed = new JsonMemory(ReadOnlyMemory<char>.Empty, in data, ref reader, ref buffer, 0);
+			reader.Dispose();
+			return parsed;
 		}
 
 		public static bool TryParseJson(string data, out JsonMemory parsed) {
@@ -2603,6 +2688,615 @@ namespace NanoJson {
 
 	#endregion
 
+	#region ### CharRegionReader ###
+
+	public ref struct JsonReader {
+
+		private readonly ReadOnlySpan<ushort> source;
+		private readonly int sourceLen;
+		private readonly int endIndex;
+
+		public int CurrentIndex { get; private set; }
+		public readonly ushort CurrentChar => this.source[this.CurrentIndex];
+
+		private readonly ushort[] Rent;
+
+		public JsonReader(ReadOnlySpan<char> data, bool fromEnd = false) {
+			this.source = MemoryMarshal.Cast<char, ushort>(data);
+			this.sourceLen = data.Length;
+			this.endIndex = this.sourceLen - 1;
+
+			Span<ushort> presets = stackalloc ushort[] { ',', '}', ']', };
+			this.Rent = ArrayPool<ushort>.Shared.Rent(presets.Length);
+			presets.CopyTo(this.Rent);
+
+			if (fromEnd) {
+				this.CurrentIndex = data.Length;
+			}
+			else {
+				this.CurrentIndex = -1;
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public readonly void Dispose() {
+			ArrayPool<ushort>.Shared.Return(this.Rent);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool Increment() {
+			if (this.CurrentIndex < this.endIndex) {
+				this.CurrentIndex++;
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool Decrement() {
+			if (this.CurrentIndex > 0) {
+				this.CurrentIndex--;
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SetIndexPosition(int index) {
+			if (index < 0) {
+				this.SetIndexToStart();
+			}
+			else if (index > this.endIndex) {
+				this.SetIndexToEnd();
+			}
+			else {
+				this.CurrentIndex = index;
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SetIndexToStart() {
+			this.CurrentIndex = -1;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SetIndexToEnd() {
+			this.CurrentIndex = this.sourceLen;
+		}
+
+		#region # ADVANCE #
+
+		public ushort Advance(int amount = 1) {
+			while (this.Increment() && --amount > 0) { }
+			return this.CurrentChar;
+		}
+
+		public int AdvanceTo(ushort search) {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(search);
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end <= this.sourceLen) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] > 0) {
+								this.CurrentIndex += i;
+								return this.CurrentIndex;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (this.CurrentChar == search) {
+							return this.CurrentIndex;
+						}
+					} while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return -1;
+		}
+
+		public int AdvanceToNot(ushort search) {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(search);
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end < this.endIndex) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentIndex;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] == 0) {
+								this.CurrentIndex += i;
+								return this.CurrentIndex;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (this.CurrentChar != search) {
+							return this.CurrentIndex;
+						}
+					}
+					while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return -1;
+		}
+
+		public ushort AdvanceTo(in Span<ushort> search) {
+			int segment = Vector<ushort>.Count;
+			int searchLen = search.Length;
+			Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
+			for (int i = 0; i < searchLen; i++) {
+				searchVector[i] = new Vector<ushort>(search[i]);
+			}
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end < this.endIndex) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector<ushort>.Zero;
+					for (int i = 0; i < searchLen; i++) {
+						eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+					}
+					if (eq == Vector<ushort>.Zero) {
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] > 0) {
+								this.CurrentIndex += i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						ushort current = this.CurrentChar;
+						if (search.IndexOf(current) >= 0) {
+							return current;
+						}
+					} while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort AdvanceToNot(in Span<ushort> search) {
+			int segment = Vector<ushort>.Count;
+			int searchLen = search.Length;
+			Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
+			Span<ushort> buf = stackalloc ushort[segment];
+			for (int i = 0; i < searchLen; i++) {
+				searchVector[i] = new Vector<ushort>(search[i]);
+			}
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end < this.endIndex) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector<ushort>.Zero;
+					for (int i = 0; i < searchLen; i++) {
+						eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+					}
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] == 0) {
+								this.CurrentIndex += i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						ushort current = this.CurrentChar;
+						if (search.IndexOf(current) < 0) {
+							return current;
+						}
+					}
+					while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort AdvanceToWhiteSpace() {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end < this.endIndex) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] == 0) {
+								this.CurrentIndex += i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (NanoJsonStatics.IsWhiteSpace(this.CurrentChar)) {
+							return this.CurrentChar;
+						}
+					}
+					while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort AdvanceToNotWhiteSpace() {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Increment()) {
+				Continue: // Bypass Increment
+				int end = this.CurrentIndex + segment;
+				if (end < this.endIndex) {
+					this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = 0; i < segment; i++) {
+							if (eq[i] == 0) {
+								this.CurrentIndex += i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex += segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (!NanoJsonStatics.IsWhiteSpace(this.CurrentChar)) {
+							return this.CurrentChar;
+						}
+					}
+					while (this.Increment());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort AdvanceToCommaOrEndBrace() {
+			return this.AdvanceTo(this.Rent.AsSpan(0, 3));
+		}
+
+		#endregion
+
+
+		#region # RETREAT #
+
+		public ushort Retreat(int amount = 1) {
+			while (this.Decrement() && --amount > 0) { }
+			return this.CurrentChar;
+		}
+
+		public int RetreatTo(ushort search) {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(search);
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] > 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentIndex;
+							}
+						}
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (this.CurrentChar == search) {
+							return this.CurrentIndex;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return -1;
+		}
+
+		public int RetreatToNot(ushort search) {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(search);
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentIndex;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] == 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentIndex;
+							}
+						}
+						this.CurrentIndex -= segment; // Segments is one base so dont increment
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (this.CurrentChar != search) {
+							return this.CurrentIndex;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return -1;
+		}
+
+		public ushort RetreatTo(in Span<ushort> search) {
+			int segment = Vector<ushort>.Count;
+			int searchLen = search.Length;
+			Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
+			Span<ushort> buf = stackalloc ushort[segment];
+			for (int i = 0; i < searchLen; i++) {
+				searchVector[i] = new Vector<ushort>(search[i]);
+			}
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector<ushort>.Zero;
+					for (int i = 0; i < searchLen; i++) {
+						eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+					}
+					if (eq == Vector<ushort>.Zero) {
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] > 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						ushort current = this.CurrentChar;
+						if (search.IndexOf(current) >= 0) {
+							return current;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort RetreatToNot(in Span<ushort> search) {
+			int segment = Vector<ushort>.Count;
+			int searchLen = search.Length;
+			Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
+			Span<ushort> buf = stackalloc ushort[segment];
+			for (int i = 0; i < searchLen; i++) {
+				searchVector[i] = new Vector<ushort>(search[i]);
+			}
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector<ushort>.Zero;
+					for (int i = 0; i < searchLen; i++) {
+						eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+					}
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] == 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						ushort current = this.CurrentChar;
+						if (search.IndexOf(current) < 0) {
+							return current;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort RetreatToWhiteSpace() {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' ' 
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] == 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (NanoJsonStatics.IsWhiteSpace(this.CurrentChar)) {
+							return this.CurrentChar;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		public ushort RetreatToNotWhiteSpace() {
+			int segment = Vector<ushort>.Count;
+			Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' ' 
+			Span<ushort> buf = stackalloc ushort[segment];
+			while (this.Decrement()) {
+				Continue:
+				int start = this.CurrentIndex - (segment - 1);
+				if (start > -1) {
+					this.source.Slice(start, segment).CopyTo(buf);
+					Vector<ushort> toCompare = new Vector<ushort>(buf);
+					Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
+					if (eq == Vector<ushort>.Zero) {
+						return this.CurrentChar;
+					}
+					else {
+						for (int i = segment - 1; i >= 0; i--) {
+							if (eq[i] == 0) {
+								this.CurrentIndex = start + i;
+								return this.CurrentChar;
+							}
+						}
+						this.CurrentIndex -= segment;
+						goto Continue;
+					}
+				}
+				else {
+					do {
+						if (!NanoJsonStatics.IsWhiteSpace(this.CurrentChar)) {
+							return this.CurrentChar;
+						}
+					}
+					while (this.Decrement());
+					goto End;
+				}
+			}
+			End:
+			return '\0';
+		}
+
+		#endregion
+
+	}
+
+	#endregion
+
 	#region ### NanoJsonStatics ###
 
 	public static class NanoJsonStatics {
@@ -2777,6 +3471,16 @@ namespace NanoJson {
 			return character < 33;
 		}
 
+		/// <summary>
+		/// Returns true if char value is less than 33
+		/// </summary>
+		/// <param name="character"></param>
+		/// <returns></returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsWhiteSpace(ushort character) {
+			return character < 33;
+		}
+
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int ReadHexNumber(char character) {
 			switch (character) {
@@ -2829,6 +3533,136 @@ namespace NanoJson {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool HasFlag(long left, long right) {
 			return (left & right) > 0;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static double ParseNumber(in ReadOnlySpan<char> data) {
+			double returnNumber = double.NaN;
+			int len = data.Length;
+			if (len > 0) {
+				int pos = 0;
+
+				// handle sign
+				char c = data[pos];
+				bool negative = c == '-';
+				if (negative || c == '+') {
+					pos++;
+				}
+
+				// find 'e' or 'E' for exponent (if any)
+				int eIndex = -1;
+				for (int x = pos; x < len; x++) {
+					c = data[x];
+					if (c == 'e' || c == 'E') {
+						eIndex = x;
+						break;
+					}
+				}
+
+				// main part (integer + fractional) excludes exponent
+				ReadOnlySpan<char> mainSpan = eIndex > 0 ? data.Slice(pos, eIndex - pos) : data.Slice(pos);
+
+				// parse integer and fractional parts
+				double value = 0.0d;
+				bool seenDecimal = false;
+				double fracDiv = 1.0;
+				for (int x = 0; x < mainSpan.Length; x++) {
+					c = mainSpan[x];
+					if (c == '.') {
+						seenDecimal = true;
+						continue;
+					}
+					int digit = NanoJsonStatics.ReadHexNumber(c); // expects '0' to '9'
+					if (!seenDecimal) {
+						value = value * 10.0 + digit;
+					}
+					else {
+						fracDiv *= 10.0;
+						value += digit / fracDiv;
+					}
+				}
+
+				// parse exponent (if present) and apply
+				if (eIndex > 0) {
+					int expPos = eIndex + 1;
+					bool expNegative = false;
+					if (expPos < len) {
+						char ec = data[expPos];
+						expNegative = ec == '-';
+						if (expNegative || ec == '+') {
+							expPos++;
+						}
+					}
+					int expVal = 0;
+					for (int x = expPos; x < len; x++) {
+						expVal = expVal * 10 + NanoJsonStatics.ReadHexNumber(data[x]);
+					}
+					if (expNegative) {
+						expVal = -expVal;
+					}
+					value *= Math.Pow(10.0, expVal);
+				}
+
+				returnNumber = negative ? -value : value;
+			}
+			return returnNumber;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsNumber(ReadOnlySpan<char> data) {
+			int len = data.Length;
+			if (len == 0) {
+				return false;
+			}
+			int index = -1;
+			bool dec = false;
+			bool EFound = false;
+			if (data[0] == '-' || data[0] == '+') {
+				index++;
+			}
+
+			while (++index < len) {
+				switch (data[index]) {
+					case '0':
+					case '1':
+					case '2':
+					case '3':
+					case '4':
+					case '5':
+					case '6':
+					case '7':
+					case '8':
+					case '9': {
+						continue;
+					}
+					case '.': {
+						if (dec) {
+							return false;
+						}
+						dec = true;
+						continue;
+					}
+					case 'e':
+					case 'E': {
+						if (EFound) {
+							return false;
+						}
+						else {
+							char c = data[++index];
+							if ((c ^ '+') == 0 || (c ^ '-') == 0) {
+								EFound = true;
+								continue;
+							}
+							else {
+								return false;
+							}
+						}
+					}
+					default:
+						return false;
+				}
+			}
+			return true;
 		}
 
 	}
