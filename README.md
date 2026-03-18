@@ -93,8 +93,22 @@ public static JsonMemory AssignKeyToValue(string key, JsonMemory data); // To cr
 ```
 Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
 
+## IDisposable Support
+As JsonMemory uses arrays to store the data, it implements IDisposable to allow the user to dispose of the arrays when they are no longer needed.
+The pooled arrays are provided by NanoJsonStatics.JsonContainerPool, on dispose the arrays are returned to the pool for reuse.
+```CS
+private void Function(string jsonData) {
+    using (JsonMemory JMemory = JsonMemory.ParseJson(jsonData)) {
+        ... // Use JMemory here
+    }
+
+    JsonMemory JMemory2 = JsonMemory.ParseJson(jsonData);
+    JMemory2.Dispose(); // Dispose of the arrays when no longer needed at your own leisure
+}
+```
+
 ## JsonMemory arrays
-JsonMemory objects and arrays are built using standard arrays, create the objects you want into the container
+JsonMemory objects and arrays are built using standard arrays, create the objects you want into a container and then use an Extension or static method for creating a Object or an Array with the array.
 
 ## JsonSpan
 The absolute smallest, parse on demand Json.  
