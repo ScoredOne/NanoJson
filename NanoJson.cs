@@ -16,6 +16,8 @@
 
 using System;
 using System.Buffers;
+using System.Collections;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -1202,12 +1204,11 @@ namespace NanoJson {
         private readonly ReadOnlyMemory<char> ReferenceData;
         private readonly ReadOnlyMemory<char> KeyData;
         public readonly JsonType Type;
-        private readonly JsonMemory[] InnerValues;
+        private readonly IEnumerable<JsonMemory> InnerValues;
         /// <summary>
         /// Gets the length of the contained values for Array or Object
         /// </summary>
         public readonly int InnerLength;
-        private readonly bool RentedSpace;
 
 
         private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> reference, ref JsonReader reader, ref JsonMemory[] existingBuffer, int bufferIndex) {
@@ -1226,7 +1227,6 @@ namespace NanoJson {
             }
             switch (first) {
                 case QUOTE: {
-                    this.RentedSpace = false;
                     this.Type = JsonType.String;
                     this.InnerValues = Array.Empty<JsonMemory>();
                     int left = reader.CurrentIndex + 1;
@@ -1248,7 +1248,6 @@ namespace NanoJson {
                         this.InnerValues = Array.Empty<JsonMemory>();
                         this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
                         this.InnerLength = 0;
-                        this.RentedSpace = false;
                         return;
                     }
                     int refStart = left;
@@ -1388,11 +1387,11 @@ namespace NanoJson {
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
                     ReadComplete:
-                    this.RentedSpace = true;
                     int valuesLen = bufPos - bufferIndex;
                     this.InnerLength = valuesLen;
-                    this.InnerValues = JsonContainerPool.Rent(valuesLen);
-                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.InnerValues.AsSpan());
+                    JsonContainerPool.RentedContainer rented = new JsonContainerPool.RentedContainer(valuesLen);
+                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(rented.Value.AsSpan());
+                    this.InnerValues = rented;
                     if (bufferSource) {
                         JsonContainerPool.Return(existingBuffer);
                     }
@@ -1406,7 +1405,6 @@ namespace NanoJson {
                         this.InnerValues = Array.Empty<JsonMemory>();
                         this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
                         this.InnerLength = 0;
-                        this.RentedSpace = false;
                         return;
                     }
                     int refStart = left;
@@ -1566,11 +1564,11 @@ namespace NanoJson {
                     }
 
                     ReadComplete:
-                    this.RentedSpace = true;
                     int valuesLen = bufPos - bufferIndex;
-                    this.InnerValues = JsonContainerPool.Rent(valuesLen);
                     this.InnerLength = valuesLen;
-                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.InnerValues.AsSpan());
+                    JsonContainerPool.RentedContainer rented = new JsonContainerPool.RentedContainer(valuesLen);
+                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(rented.Value.AsSpan());
+                    this.InnerValues = rented;
                     if (bufferSource) {
                         JsonContainerPool.Return(existingBuffer);
                     }
@@ -1579,7 +1577,6 @@ namespace NanoJson {
                 }
                 case N_LOWER:
                 case N_UPPER: {
-                    this.RentedSpace = false;
                     this.InnerLength = 0;
                     this.Type = JsonType.Null;
                     this.InnerValues = Array.Empty<JsonMemory>();
@@ -1598,7 +1595,6 @@ namespace NanoJson {
                 }
                 case T_LOWER:
                 case T_UPPER: {
-                    this.RentedSpace = false;
                     this.InnerLength = 0;
                     this.Type = JsonType.Boolean;
                     this.InnerValues = Array.Empty<JsonMemory>();
@@ -1617,7 +1613,6 @@ namespace NanoJson {
                 }
                 case F_LOWER:
                 case F_UPPER: {
-                    this.RentedSpace = false;
                     this.InnerLength = 0;
                     this.Type = JsonType.Boolean;
                     this.InnerValues = Array.Empty<JsonMemory>();
@@ -1635,7 +1630,6 @@ namespace NanoJson {
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
                 }
                 default: {
-                    this.RentedSpace = false;
                     this.InnerLength = 0;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
@@ -1653,16 +1647,28 @@ namespace NanoJson {
 
             throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()})", nameof(reference));
         }
-        private JsonMemory(in JsonType type, bool rented, JsonMemory[] contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
+        private JsonMemory(in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
 
-        private JsonMemory(in ReadOnlyMemory<char> key, in JsonType type, bool rented, JsonMemory[] contents, int innerLength = -1) {
+        private JsonMemory(in ReadOnlyMemory<char> key, in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) {
             switch (type) {
                 case JsonType.Array:
                 case JsonType.Object:
                     this.Type = type;
                     this.InnerValues = contents;
-                    this.InnerLength = innerLength >= 0 ? innerLength : contents.Length;
-                    this.RentedSpace = rented;
+                    if (innerLength >= 0) {
+                        this.InnerLength = innerLength;
+                    }
+                    else {
+                        if (contents is JsonContainerPool.RentedContainer rc) {
+                            this.InnerLength = rc.Value.Length;
+                        }
+                        else if (contents is JsonMemory[] ar) {
+                            this.InnerLength = ar.Length;
+                        }
+                        else {
+                            throw new InvalidCastException("Unsupported container type, only JsonMemory[] or JsonContainerPool.RentedContainer supported");
+                        }
+                    }
                     this.KeyData = key;
                     this.ReferenceData = ReadOnlyMemory<char>.Empty;
                     break;
@@ -1675,9 +1681,15 @@ namespace NanoJson {
             this.KeyData = key;
             this.Type = value.Type;
             this.ReferenceData = value.ReferenceData;
-            this.InnerValues = value.InnerValues;
-            this.InnerLength = this.InnerValues.Length;
-            this.RentedSpace = false;
+            this.InnerLength = value.InnerLength;
+            if (value.InnerValues is JsonContainerPool.RentedContainer rc) { // Dispose protection for the new value
+                JsonContainerPool.RentedContainer newConatiner = new JsonContainerPool.RentedContainer(value.InnerLength);
+                rc.Value.AsSpan(0, value.InnerLength).CopyTo(newConatiner.Value.AsSpan(0, value.InnerLength));
+                this.InnerValues = newConatiner;
+            }
+            else {
+                this.InnerValues = value.InnerValues;
+            }
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, bool value) {
@@ -1686,7 +1698,6 @@ namespace NanoJson {
             this.ReferenceData = value ? bool.TrueString.AsMemory() : bool.FalseString.AsMemory();
             this.InnerValues = Array.Empty<JsonMemory>();
             this.InnerLength = 0;
-            this.RentedSpace = false;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, double value) {
@@ -1695,7 +1706,6 @@ namespace NanoJson {
             this.ReferenceData = value.ToString().AsMemory();
             this.InnerValues = Array.Empty<JsonMemory>();
             this.InnerLength = 0;
-            this.RentedSpace = false;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key) {
@@ -1704,7 +1714,6 @@ namespace NanoJson {
             this.ReferenceData = NULL.AsMemory();
             this.InnerValues = Array.Empty<JsonMemory>();
             this.InnerLength = 0;
-            this.RentedSpace = false;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, in string value) : this(key, value.AsMemory()) { }
@@ -1714,7 +1723,6 @@ namespace NanoJson {
             this.ReferenceData = value;
             this.InnerValues = Array.Empty<JsonMemory>();
             this.InnerLength = 0;
-            this.RentedSpace = false;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, JsonType overridingType, in ReadOnlyMemory<char> value) {
@@ -1726,7 +1734,6 @@ namespace NanoJson {
             this.ReferenceData = value;
             this.InnerValues = Array.Empty<JsonMemory>();
             this.InnerLength = 0;
-            this.RentedSpace = false;
         }
 
         public void Dispose() => this.Dispose(true);
@@ -1740,9 +1747,9 @@ namespace NanoJson {
                 for (int x = 0; x < container.InnerLength; x++) {
                     ref readonly JsonMemory next = ref container[x];
                     if (HasFlag((long)JsonType.Container, (long)next.Type)) {
-                        CycleEach(in container[x]);
-                        if (next.RentedSpace) { // Return after cycled
-                            JsonContainerPool.Return(next.InnerValues);
+                        CycleEach(in next);
+                        if (next.InnerValues is JsonContainerPool.RentedContainer rc) { // Return after cycled
+                            rc.Dispose();
                         }
                     }
                 }
@@ -1751,15 +1758,15 @@ namespace NanoJson {
             if (includingSubObjects) {
                 CycleEach(in this);
             }
-            if (this.RentedSpace) {
-                JsonContainerPool.Return(this.InnerValues);
+            if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
+                rc.Dispose();
             }
         }
 
         /// <summary>
         /// If this was created using rented space, making it eligible within using or calling dispose to save memory
         /// </summary>
-        public readonly bool CanDispose => this.RentedSpace;
+        public readonly bool CanDispose => this.InnerValues is JsonContainerPool.RentedContainer;
 
         /// <summary>
         /// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
@@ -2285,7 +2292,21 @@ namespace NanoJson {
         /// <summary>
         /// Get the values contained inside This object
         /// </summary>
-        public readonly ReadOnlySpan<JsonMemory> GetInsideValues => this.InnerValues.AsSpan();
+        public readonly ReadOnlySpan<JsonMemory> GetInsideValues
+        {
+            get
+            {
+                if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
+                    return (ReadOnlySpan<JsonMemory>)rc.Value.AsSpan(0, this.InnerLength);
+                }
+                else if (this.InnerValues is JsonMemory[] ar) {
+                    return (ReadOnlySpan<JsonMemory>)ar.AsSpan(0, this.InnerLength);
+                }
+                else {
+                    throw new InvalidCastException("Unsupported container type, only JsonMemory[] or JsonContainerPool.RentedContainer supported");
+                }
+            }
+        }
 
         /// <summary>
         /// Get if This object is Null
@@ -2470,7 +2491,7 @@ namespace NanoJson {
         /// </summary>
         public readonly JsonMemory GetKeyOrEmpty(in ReadOnlySpan<char> key) => this.TryGetKey(in key, out JsonMemory found) ? found : Empty;
 
-        public readonly ReadOnlySpan<JsonMemory>.Enumerator GetEnumerator() => ((ReadOnlySpan<JsonMemory>)this.InnerValues.AsSpan(0, this.InnerLength)).GetEnumerator();
+        public readonly ReadOnlySpan<JsonMemory>.Enumerator GetEnumerator() => this.GetInsideValues.GetEnumerator();
 
         public readonly override bool Equals(object obj) => obj is JsonMemory other && this.Equals(other);
         public readonly bool Equals(JsonMemory other) {
@@ -4053,6 +4074,44 @@ namespace NanoJson {
                     buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
                     ContainerPool.Value.Return(buffer, true); // Release memory references
                     buffer = newArray;
+                }
+            }
+
+            internal sealed class RentedContainer : IDisposable, IEnumerable<JsonMemory> {
+                public JsonMemory[] Value { get; private set; }
+
+                public RentedContainer(int length) {
+                    this.Value = ContainerPool.Value.Rent(length);
+                }
+
+#pragma warning disable CA1816 // Dispose methods should call SuppressFinalize
+                public void Dispose() {
+                    this.CleanUp(true);
+                }
+
+                ~RentedContainer() {
+                    this.CleanUp(false);
+                }
+
+                private void CleanUp(bool suppress) {
+                    lock (this.Value) {
+                        if (this.Value != null) {
+                            ContainerPool.Value.Return(this.Value, true);
+                            this.Value = null;
+                            if (suppress) {
+                                GC.SuppressFinalize(this);
+                            }
+                        }
+                    }
+                }
+#pragma warning restore CA1816 // Dispose methods should call SuppressFinalize
+
+                public IEnumerator<JsonMemory> GetEnumerator() {
+                    return ((IEnumerable<JsonMemory>)this.Value).GetEnumerator();
+                }
+
+                IEnumerator IEnumerable.GetEnumerator() {
+                    return this.GetEnumerator();
                 }
             }
 
