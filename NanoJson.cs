@@ -1255,12 +1255,12 @@ namespace NanoJson {
 
                     bool bufferSource;
                     if (existingBuffer == null) {
-                        existingBuffer = ArrayPool<JsonMemory>.Shared.Rent(16);
+                        existingBuffer = JsonContainerPool.Rent(16);
                         bufferSource = true;
                     }
                     else {
                         bufferSource = false;
-                        EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
+                        JsonContainerPool.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
                     }
 
                     int bufPos = bufferIndex;
@@ -1279,7 +1279,7 @@ namespace NanoJson {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 if (advance == COMMA) {
                                     reader.AdvanceToNotWhiteSpace();
@@ -1294,7 +1294,7 @@ namespace NanoJson {
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 if (reader.AdvanceToCommaOrEndBrace() == RBRACKET) {
                                     goto ReadComplete;
@@ -1375,7 +1375,7 @@ namespace NanoJson {
                                 }
 
                                 ++bufPos;
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 if (advanced == RBRACKET) {
                                     goto ReadComplete;
@@ -1394,7 +1394,7 @@ namespace NanoJson {
                     this.InnerValues = JsonContainerPool.Rent(valuesLen);
                     existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.InnerValues.AsSpan());
                     if (bufferSource) {
-                        ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
+                        JsonContainerPool.Return(existingBuffer);
                     }
                     this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
                     return;
@@ -1413,11 +1413,11 @@ namespace NanoJson {
 
                     bool bufferSource = false;
                     if (existingBuffer == null) {
-                        existingBuffer = ArrayPool<JsonMemory>.Shared.Rent(16);
+                        existingBuffer = JsonContainerPool.Rent(16);
                         bufferSource = true;
                     }
                     else {
-                        EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
+                        JsonContainerPool.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
                     }
 
                     int bufPos = bufferIndex;
@@ -1453,7 +1453,7 @@ namespace NanoJson {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 if (advance == COMMA) {
                                     reader.Increment();
@@ -1468,7 +1468,7 @@ namespace NanoJson {
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 switch (reader.AdvanceToCommaOrEndBrace()) {
                                     case RBRACKET:
@@ -1551,7 +1551,7 @@ namespace NanoJson {
 
                                 }
                                 ++bufPos;
-                                EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 if (advanced == RBRACE) {
                                     goto ReadComplete;
@@ -1572,7 +1572,7 @@ namespace NanoJson {
                     this.InnerLength = valuesLen;
                     existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.InnerValues.AsSpan());
                     if (bufferSource) {
-                        ArrayPool<JsonMemory>.Shared.Return(existingBuffer, true);
+                        JsonContainerPool.Return(existingBuffer);
                     }
                     this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
                     return;
@@ -1742,7 +1742,7 @@ namespace NanoJson {
                     if (HasFlag((long)JsonType.Container, (long)next.Type)) {
                         CycleEach(in container[x]);
                         if (next.RentedSpace) { // Return after cycled
-                            JsonContainerPool.Return(in next.InnerValues);
+                            JsonContainerPool.Return(next.InnerValues);
                         }
                     }
                 }
@@ -1752,7 +1752,7 @@ namespace NanoJson {
                 CycleEach(in this);
             }
             if (this.RentedSpace) {
-                JsonContainerPool.Return(in this.InnerValues);
+                JsonContainerPool.Return(this.InnerValues);
             }
         }
 
@@ -3781,22 +3781,6 @@ namespace NanoJson {
         }
 
         /// <summary>
-        /// <c>USES ARRAYPOOL ARRAYS</c>, do not insert normal arrays
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="nextIndex"></param>
-        /// <param name="buffer"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
-            if (nextIndex >= buffer.Length) {
-                JsonMemory[] newArray = ArrayPool<JsonMemory>.Shared.Rent(nextIndex + 1);
-                buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
-                ArrayPool<JsonMemory>.Shared.Return(buffer, true); // Release memory references
-                buffer = newArray;
-            }
-        }
-
-        /// <summary>
         /// Returns true if char value is less than 33
         /// </summary>
         /// <param name="character"></param>
@@ -4046,13 +4030,32 @@ namespace NanoJson {
 
             private static readonly Lazy<ArrayPool<JsonMemory>> ContainerPool = new Lazy<ArrayPool<JsonMemory>>(() => ArrayPool<JsonMemory>.Create(PoolMaxArrayLength, ArraysPerBucket), LazyThreadSafetyMode.PublicationOnly);
 
-            internal static JsonMemory[] Rent(int len) {
-                return ContainerPool.Value.Rent(len);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            internal static JsonMemory[] Rent(int length) {
+                if (length < 1 || length > PoolMaxArrayLength) {
+                    throw new ArgumentOutOfRangeException(nameof(length), $"Length must be between 1 and {PoolMaxArrayLength}.");
+                }
+                return ContainerPool.Value.Rent(length);
             }
 
-            internal static void Return(in JsonMemory[] container) {
-                ContainerPool.Value.Return(container, true);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            internal static void Return(JsonMemory[] array) {
+                if (array == null) {
+                    throw new ArgumentNullException(nameof(array));
+                }
+                ContainerPool.Value.Return(array, true);
             }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            internal static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
+                if (nextIndex >= buffer.Length) {
+                    JsonMemory[] newArray = ContainerPool.Value.Rent(nextIndex + 1);
+                    buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
+                    ContainerPool.Value.Return(buffer, true); // Release memory references
+                    buffer = newArray;
+                }
+            }
+
         }
     }
 

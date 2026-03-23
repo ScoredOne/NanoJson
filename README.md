@@ -6,7 +6,7 @@
 NetStandard 2.1  
 
 Small and simple Json Parser to minimise memory allocation of Json.  
-(Formerly NanoJson.NJson ext)
+(Formerly NanoJson.NJson)
 
 Theory:
 - String goes in
@@ -94,7 +94,7 @@ public static JsonMemory AssignKeyToValue(string key, JsonMemory data); // To cr
 Statics are provided to create the objects you want. Constructors are private to maintain consistent object construction due to recursive loops.  
 
 ## IDisposable Support
-As JsonMemory uses arrays to store the data, it implements IDisposable to allow the user to dispose of the arrays when they are no longer needed.
+As JsonMemory uses arrays to store the data, it implements IDisposable to allow you to dispose of the arrays when they are no longer needed.
 The pooled arrays are provided by NanoJsonStatics.JsonContainerPool, on dispose the arrays are returned to the pool for reuse.
 ```CS
 private void Function(string jsonData) {
