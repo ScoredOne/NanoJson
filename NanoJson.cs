@@ -4,13 +4,15 @@
 ///															///
 ///		Released under the MIT license						///
 ///															///
-///		Thursday 27th November 2025							///
-///															///
 ///		Software provided in as-is condition				///
 ///															///
 ///		Git: https://github.com/ScoredOne/NanoJson			///
 ///															///
 ///		Nuget: https://www.nuget.org/packages/NanoJson		///
+///		                                                    ///
+///     Base: NetStandard 2.1 C# 8                          ///
+///                                                         ///
+///     Version: 1.3.1                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -4005,6 +4007,17 @@ namespace NanoJson {
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void EnsureBufferCapacity<T>(int nextIndex, ref T[] buffer, ArrayPool<T> existingPool = null) {
+            if (nextIndex >= buffer.Length) {
+                existingPool ??= ArrayPool<T>.Shared;
+                T[] newArray = existingPool.Rent(nextIndex + 1);
+                buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
+                existingPool.Return(buffer, true); // Release memory references
+                buffer = newArray;
+            }
+        }
+
         public static class JsonContainerPool {
             private const int knownMax = 1 << 20;
             private const int knownMin = 1 << 4;
@@ -4069,42 +4082,33 @@ namespace NanoJson {
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
-                if (nextIndex >= buffer.Length) {
-                    JsonMemory[] newArray = ContainerPool.Value.Rent(nextIndex + 1);
-                    buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
-                    ContainerPool.Value.Return(buffer, true); // Release memory references
-                    buffer = newArray;
-                }
+                EnsureBufferCapacity<JsonMemory>(nextIndex, ref buffer, ContainerPool.Value);
             }
 
             internal sealed class RentedContainer : IDisposable, IEnumerable<JsonMemory> {
                 public JsonMemory[] Value { get; private set; }
 
                 public RentedContainer(int length) {
-                    this.Value = ContainerPool.Value.Rent(length);
+                    this.Value = Rent(length);
                 }
 
-#pragma warning disable CA1816 // Dispose methods should call SuppressFinalize
                 public void Dispose() {
-                    this.CleanUp(true);
+                    this.CleanUp();
+                    GC.SuppressFinalize(this);
                 }
 
                 ~RentedContainer() {
-                    this.CleanUp(false);
+                    this.CleanUp();
                 }
 
-                private void CleanUp(bool suppress) {
+                private void CleanUp() {
                     lock (this.Value) {
                         if (this.Value != null) {
-                            ContainerPool.Value.Return(this.Value, true);
+                            Return(this.Value);
                             this.Value = null;
-                            if (suppress) {
-                                GC.SuppressFinalize(this);
-                            }
                         }
                     }
                 }
-#pragma warning restore CA1816 // Dispose methods should call SuppressFinalize
 
                 public IEnumerator<JsonMemory> GetEnumerator() {
                     return ((IEnumerable<JsonMemory>)this.Value).GetEnumerator();
