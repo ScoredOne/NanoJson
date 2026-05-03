@@ -619,6 +619,8 @@ namespace NanoJson {
             }
         }
 
+        public readonly JsonSpan this[in string key] => this[key.AsSpan()];
+
         public readonly JsonSpan this[in ReadOnlySpan<char> key]
         {
             get
