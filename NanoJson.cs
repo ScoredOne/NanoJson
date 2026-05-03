@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.1                                      ///
+///     Version: 1.3.2                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -1274,8 +1274,9 @@ namespace NanoJson {
 
                         switch (leftChar) {
                             case QUOTE: {
+                                ++left;
                                 reader.AdvanceTo(QUOTE);
-                                int r = reader.CurrentIndex + 1;
+                                int r = reader.CurrentIndex;
                                 ushort advance = reader.AdvanceToCommaOrEndBrace();
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
@@ -1440,7 +1441,9 @@ namespace NanoJson {
                         do {
                             reader.Increment();
                         } while (reader.CurrentValue == COLON);
-                        reader.AdvanceToNotWhiteSpace();
+                        if (IsWhiteSpace(reader.CurrentValue)) {
+                            reader.AdvanceToNotWhiteSpace();
+                        }
                         left = reader.CurrentIndex;
                         ushort leftChar = reader.CurrentValue;
 
@@ -2867,7 +2870,7 @@ namespace NanoJson {
         }
 
         public override readonly string ToString() {
-            return $"Reader: {{Source ..20: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - 20)..this.CurrentIndex]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentIndex)}'}}";
+            return $"Reader: {{Source ..20: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - 20)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentIndex)}'}}";
         }
 
         public readonly ReadOnlySpan<ushort> Slice(int index, int len) {
