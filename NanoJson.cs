@@ -1292,34 +1292,17 @@ namespace NanoJson {
                                 }
                                 throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
-                            case LBRACE: {
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
-                                if (reader.CurrentValue != RBRACE && reader.CurrentValue != COMMA) {
-                                    reader.AdvanceToCommaOrEndBrace();
-                                }
-                                switch (reader.CurrentValue) {
-                                    case RBRACE:
-                                        goto ReadComplete;
-                                    case COMMA:
-                                        continue;
-                                }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
-                            }
+                            case LBRACE:
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                if (reader.CurrentValue != RBRACKET && reader.CurrentValue != COMMA) {
-                                    reader.AdvanceToCommaOrEndBracket();
-                                }
-                                switch (reader.CurrentValue) {
+                                switch (reader.AdvanceToCommaOrEndBracket()) {
                                     case RBRACKET:
                                         goto ReadComplete;
                                     case COMMA:
+                                        reader.AdvanceToNotWhiteSpace();
                                         continue;
                                 }
                                 throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
@@ -1487,32 +1470,14 @@ namespace NanoJson {
                                 }
                                 throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
-                            case LBRACE: {
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
-                                if (reader.CurrentValue != RBRACE && reader.CurrentValue != COMMA) {
-                                    reader.AdvanceToCommaOrEndBrace();
-                                }
-                                switch (reader.CurrentValue) {
-                                    case RBRACE:
-                                        goto ReadComplete;
-                                    case COMMA:
-                                        continue;
-                                }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
-                            }
+                            case LBRACE:
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                if (reader.CurrentValue != RBRACKET && reader.CurrentValue != COMMA) {
-                                    reader.AdvanceToCommaOrEndBracket();
-                                }
-                                switch (reader.CurrentValue) {
-                                    case RBRACKET:
+                                switch (reader.AdvanceToCommaOrEndBrace()) {
+                                    case RBRACE:
                                         goto ReadComplete;
                                     case COMMA:
                                         continue;
