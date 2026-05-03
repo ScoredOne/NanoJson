@@ -6,7 +6,6 @@
 NetStandard 2.1  
 
 Small and simple Json Parser to minimise memory allocation of Json.  
-(Formerly NanoJson.NJson)
 
 Theory:
 - String goes in
