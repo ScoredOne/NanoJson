@@ -532,13 +532,16 @@ namespace NanoJson {
         {
             get
             {
-                if (this.IsEmpty) {
-                    throw new IndexOutOfRangeException("Body is Empty");
+                switch (this.Type) {
+                    case JsonType.Object:
+                    case JsonType.Array:
+                        if (this.TryGetIndex(in index, out JsonSpan v)) {
+                            return v;
+                        }
+                        goto default;
+                    default:
+                        throw new IndexOutOfRangeException();
                 }
-                if (this.TryGetIndex(in index, out JsonSpan v)) {
-                    return v;
-                }
-                throw new IndexOutOfRangeException();
             }
         }
 
@@ -620,13 +623,10 @@ namespace NanoJson {
         {
             get
             {
-                if (this.IsEmpty) {
-                    throw new IndexOutOfRangeException("Body is Empty");
-                }
-                if (this.TryGetKey(in key, out JsonSpan v)) {
+                if (this.Type == JsonType.Object && this.TryGetKey(in key, out JsonSpan v)) {
                     return v;
                 }
-                throw new IndexOutOfRangeException();
+                return Empty;
             }
         }
 
