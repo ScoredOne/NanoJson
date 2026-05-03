@@ -211,7 +211,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndBrace();
+                                providedReader.AdvanceToCommaOrEndContainer();
                                 break;
                             }
                         }
@@ -232,7 +232,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndBrace();
+                                providedReader.AdvanceToCommaOrEndContainer();
                                 break;
                             }
                         }
@@ -583,7 +583,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndBrace();
+                                providedReader.AdvanceToCommaOrEndContainer();
                                 break;
                             }
                         }
@@ -606,7 +606,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndBrace();
+                                providedReader.AdvanceToCommaOrEndContainer();
                                 break;
                             }
                         }
@@ -665,7 +665,7 @@ namespace NanoJson {
                     case RBRACKET:
                         break;
                     default: {
-                        providedReader.AdvanceToCommaOrEndBrace();
+                        providedReader.AdvanceToCommaOrEndContainer();
                         break;
                     }
                 }
@@ -1277,7 +1277,7 @@ namespace NanoJson {
                                 ++left;
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
-                                ushort advance = reader.AdvanceToCommaOrEndBrace();
+                                ushort advance = reader.AdvanceToCommaOrEndContainer();
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
@@ -1290,22 +1290,42 @@ namespace NanoJson {
                                 else if (advance == RBRACKET) {
                                     goto ReadComplete;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
-                            case LBRACE:
+                            case LBRACE: {
+                                bTemp = bufPos;
+                                newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                existingBuffer[bTemp] = newValue;
+                                if (reader.CurrentValue != RBRACE && reader.CurrentValue != COMMA) {
+                                    reader.AdvanceToCommaOrEndBrace();
+                                }
+                                switch (reader.CurrentValue) {
+                                    case RBRACE:
+                                        goto ReadComplete;
+                                    case COMMA:
+                                        continue;
+                                }
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                            }
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                if (reader.AdvanceToCommaOrEndBrace() == RBRACKET) {
-                                    goto ReadComplete;
+                                if (reader.CurrentValue != RBRACKET && reader.CurrentValue != COMMA) {
+                                    reader.AdvanceToCommaOrEndBracket();
                                 }
-                                reader.AdvanceToNotWhiteSpace();
-                                continue;
+                                switch (reader.CurrentValue) {
+                                    case RBRACKET:
+                                        goto ReadComplete;
+                                    case COMMA:
+                                        continue;
+                                }
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
                             default: {
-                                ushort advanced = reader.AdvanceToCommaOrEndBrace();
+                                ushort advanced = reader.AdvanceToCommaOrEndContainer();
                                 int continuation = reader.CurrentIndex + 1;
                                 reader.RetreatToNotWhiteSpace();
                                 reader.Increment();
@@ -1327,7 +1347,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
@@ -1344,7 +1364,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
@@ -1364,7 +1384,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
@@ -1372,7 +1392,7 @@ namespace NanoJson {
                                             newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Number, numberArea);
                                             break;
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                 }
 
@@ -1388,7 +1408,7 @@ namespace NanoJson {
                             }
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                     ReadComplete:
                     int valuesLen = bufPos - bufferIndex;
                     this.InnerLength = valuesLen;
@@ -1452,7 +1472,7 @@ namespace NanoJson {
                                 left++;
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
-                                ushort advance = reader.AdvanceToCommaOrEndBrace();
+                                ushort advance = reader.AdvanceToCommaOrEndContainer();
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
@@ -1465,24 +1485,42 @@ namespace NanoJson {
                                 else if (advance == RBRACE) {
                                     goto ReadComplete;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
-                            case LBRACE:
+                            case LBRACE: {
+                                bTemp = bufPos;
+                                newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
+                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                existingBuffer[bTemp] = newValue;
+                                if (reader.CurrentValue != RBRACE && reader.CurrentValue != COMMA) {
+                                    reader.AdvanceToCommaOrEndBrace();
+                                }
+                                switch (reader.CurrentValue) {
+                                    case RBRACE:
+                                        goto ReadComplete;
+                                    case COMMA:
+                                        continue;
+                                }
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                            }
                             case LBRACKET: {
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                switch (reader.AdvanceToCommaOrEndBrace()) {
+                                if (reader.CurrentValue != RBRACKET && reader.CurrentValue != COMMA) {
+                                    reader.AdvanceToCommaOrEndBracket();
+                                }
+                                switch (reader.CurrentValue) {
                                     case RBRACKET:
                                         goto ReadComplete;
                                     case COMMA:
                                         continue;
                                 }
-                                continue;
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
                             default: {
-                                ushort advanced = reader.AdvanceToCommaOrEndBrace();
+                                ushort advanced = reader.AdvanceToCommaOrEndContainer();
                                 int continuation = reader.CurrentIndex + 1;
                                 reader.RetreatToNotWhiteSpace();
                                 reader.Increment();
@@ -1504,7 +1542,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
@@ -1521,7 +1559,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
@@ -1541,7 +1579,7 @@ namespace NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
@@ -1549,7 +1587,7 @@ namespace NanoJson {
                                             newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Number, numberArea);
                                             break;
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
 
                                 }
@@ -1563,7 +1601,7 @@ namespace NanoJson {
                                 continue;
                             }
                         }
-                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                         NextObject:
                         continue;
                     }
@@ -1596,7 +1634,7 @@ namespace NanoJson {
                             return;
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                 }
                 case T_LOWER:
                 case T_UPPER: {
@@ -1614,7 +1652,7 @@ namespace NanoJson {
                             return;
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                 }
                 case F_LOWER:
                 case F_UPPER: {
@@ -1632,7 +1670,7 @@ namespace NanoJson {
                             return;
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, Position: {reader.CurrentIndex})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                 }
                 default: {
                     this.InnerLength = 0;
@@ -1646,11 +1684,11 @@ namespace NanoJson {
                     if (IsNumber(this.ReferenceData.Span)) {
                         return;
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.ReferenceData.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.ReferenceData.ToString()}, {reader.ToString()})", nameof(reference));
                 }
             }
 
-            throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()})", nameof(reference));
+            throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
         }
         private JsonMemory(in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
 
@@ -2844,6 +2882,24 @@ namespace NanoJson {
     [StructLayout(LayoutKind.Sequential)]
     public ref struct JsonReader {
 
+        private static int _toStringSegmentLength = 20;
+        /// <summary>
+        /// Change this value to alter the output length of ToString
+        /// </summary>
+        public static int ToStringSegmentLength
+        {
+            get => _toStringSegmentLength;
+            set
+            {
+                if (value < 1) {
+                    _toStringSegmentLength = 1;
+                }
+                else {
+                    _toStringSegmentLength = value;
+                }
+            }
+        }
+
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
         public readonly int SourceLen;
@@ -2869,8 +2925,12 @@ namespace NanoJson {
             }
         }
 
+        /// <summary>
+        /// To output the current information about the reader for debug purposes
+        /// </summary>
+        /// <returns></returns>
         public override readonly string ToString() {
-            return $"Reader: {{Source ..20: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - 20)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentIndex)}'}}";
+            return $"Reader: {{Source ..{ToStringSegmentLength}:: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - ToStringSegmentLength)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentChar)}'}}";
         }
 
         public readonly ReadOnlySpan<ushort> Slice(int index, int len) {
@@ -3138,6 +3198,86 @@ namespace NanoJson {
         }
 
         public ushort AdvanceToCommaOrEndBrace() {
+            int segment = Vector<ushort>.Count;
+            int segmentMinus = segment - 1;
+            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
+                new Vector<ushort>(COMMA),
+                new Vector<ushort>(RBRACE),
+            };
+            int searchLen = searchVectors.Length;
+            Span<ushort> buf = stackalloc ushort[segment];
+            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            while (this.Increment()) {
+                if (this.CurrentIndex + segment >= this.SourceLen) {
+                    buf.Clear();
+                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                }
+                else {
+                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                }
+                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                for (int i = 1; i < searchLen; i++) {
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                }
+                if (eq == Vector<ushort>.Zero) {
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
+                }
+                else {
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            this.CurrentIndex += i;
+                            return this.CurrentValue;
+                        }
+                    }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
+                }
+            }
+            return '\0';
+        }
+
+        public ushort AdvanceToCommaOrEndBracket() {
+            int segment = Vector<ushort>.Count;
+            int segmentMinus = segment - 1;
+            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
+                new Vector<ushort>(COMMA),
+                new Vector<ushort>(RBRACKET),
+            };
+            int searchLen = searchVectors.Length;
+            Span<ushort> buf = stackalloc ushort[segment];
+            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            while (this.Increment()) {
+                if (this.CurrentIndex + segment >= this.SourceLen) {
+                    buf.Clear();
+                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                }
+                else {
+                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                }
+                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                for (int i = 1; i < searchLen; i++) {
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                }
+                if (eq == Vector<ushort>.Zero) {
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
+                }
+                else {
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            this.CurrentIndex += i;
+                            return this.CurrentValue;
+                        }
+                    }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
+                }
+            }
+            return '\0';
+        }
+
+        public ushort AdvanceToCommaOrEndContainer() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
