@@ -1064,14 +1064,14 @@ namespace NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetNumber(string key, out double @out) => this.TryGetNumber(key.AsSpan(), out @out);
+        public readonly bool TryGetNumber(string key, out double @out) => this.TryGetNumber(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public double TryGetNumber(in ReadOnlySpan<char> key) => this.TryGetNumber(in key, out double value) ? value : double.NaN;
+        public readonly double TryGetNumber(in ReadOnlySpan<char> key) => this.TryGetNumber(in key, out double value) ? value : double.NaN;
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
@@ -1100,7 +1100,7 @@ namespace NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+        public readonly bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             return this.TryGetNumber(key.AsSpan(), out @out);
         }
 
@@ -1109,7 +1109,7 @@ namespace NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+        public readonly T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             this.TryGetNumber(in key, out T value);
             return value;
         }
@@ -1146,7 +1146,7 @@ namespace NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
+        public readonly bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the bool value of the object at path
@@ -1173,7 +1173,7 @@ namespace NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
-        public bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(@key.AsSpan(), out @out);
+        public readonly bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(@key.AsSpan(), out @out);
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
