@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.3                                      ///
+///     Version: 1.3.4                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -1651,7 +1651,7 @@ namespace NanoJson {
                     if (IsNumber(this.ReferenceData.Span)) {
                         return;
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.ReferenceData.ToString()}, {reader.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.GetStringLiteral}, {reader.ToString()})", nameof(reference));
                 }
             }
 
@@ -1843,15 +1843,15 @@ namespace NanoJson {
 
         public readonly override string ToString() => this.ToString(Default_ToStringFormat);
 
-        public readonly string ToString(ToStringFormat format) {
-            static int RecursiveCount(in JsonMemory value) {
-                int counter = value.InnerLength;
-                for (int x = 0; x < value.InnerLength; x++) {
-                    counter += RecursiveCount(value[x]);
-                }
-                return counter;
+        private static int RecursiveCount(in JsonMemory value) {
+            int counter = value.InnerLength;
+            for (int x = 0; x < value.InnerLength; x++) {
+                counter += RecursiveCount(value[x]);
             }
+            return counter;
+        }
 
+        public readonly string ToString(ToStringFormat format) {
             int indent = 0;
             int pos = 0;
 
@@ -1859,6 +1859,32 @@ namespace NanoJson {
             bool translateUnicode = HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
             bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
+
+            switch (this.Type) {
+                case JsonType.String:
+                    if (translateUnicode) {
+                        return this.GetStringDecoded;
+                    }
+                    else {
+                        return this.GetStringLiteral;
+                    }
+                case JsonType.Null:
+                    return NULL;
+                case JsonType.Number:
+                    if (reparseNumbers) {
+                        return this.GetNumberString;
+                    }
+                    else {
+                        return this.GetStringLiteral;
+                    }
+                case JsonType.Boolean:
+                    if (this.ReferenceData.Span[0] == 'T') {
+                        return lowerCaseBool ? TRUE_l : TRUE_u;
+                    }
+                    else {
+                        return lowerCaseBool ? FALSE_l : FALSE_u;
+                    }
+            }
 
             int objectCount = RecursiveCount(this);
             int estimatedCapacity = this.GetLength + objectCount * 5 + (pretty ? (objectCount * INDENT_LEN * 2) : 0) + 64; //  Reference Len + number of items if all where considered KeyValues + potential needed indents + extra buffer for additional characters
@@ -2171,7 +2197,7 @@ namespace NanoJson {
         /// <summary>
         /// Get the data used inside This object
         /// </summary>
-        public readonly string GetValue => this.Type switch { JsonType.Object => this.ToString(), JsonType.Array => this.ToString(), _ => this.ReferenceData.ToString() };
+        public readonly string GetValue => this.Type switch { JsonType.Object => this.ToString(), JsonType.Array => this.ToString(), _ => this.GetStringLiteral };
 
         /// <summary>
         /// Get the data used inside This object
@@ -2184,7 +2210,7 @@ namespace NanoJson {
         public readonly ReadOnlyMemory<char> GetValueAsMemory => this.ReferenceData;
 
         /// <summary>
-        /// Get the number contained inside This object
+        /// Get the number contained inside This object as a <c>double</c>
         /// </summary>
         public readonly double GetNumber
         {
@@ -2197,6 +2223,11 @@ namespace NanoJson {
                 return returnNumber;
             }
         }
+
+        /// <summary>
+        /// Get the number contained inside This object and parse it tostring
+        /// </summary>
+        private readonly string GetNumberString => this.GetNumber.ToString();
 
         /// <summary>
         /// Get the number contained inside This object
@@ -3746,6 +3777,10 @@ namespace NanoJson {
         public const string INDENT_TABS = "   ";
         public const int INDENT_LEN = 3;
         public const string NULL = "null";
+        public static string TRUE_u => bool.TrueString;
+        public const string TRUE_l = "true";
+        public static string FALSE_u => bool.FalseString;
+        public const string FALSE_l = "false";
 
         internal const ushort QUOTE = '"';
         internal const ushort LBRACKET = '[';

@@ -6,21 +6,22 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <Description>
-      Small and simple Json Parser to minimise memory allocation of Json.
-      Theory:
-      - String goes in
-      - Get Memory of String
-      - Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations (Arrays cannot be avoided (so far))
+		Small and simple Json Parser to minimise memory allocation of Json.
+		Theory:
+		- String goes in
+		- Get Memory of String
+		- Translate memory area into key and value information not creating new regions or allocations unneccessarily such as additional string allocations
+		- Pooled arrays are used for storing the key and value information, these are returned to the pool on disposal of the body.
 
-      Provides access to classes NanoJson and nJson;
-      NanoJson is a parse on insertion, readonly struct based memory plotter allocating only the array space required and the string data that needs to exist.
-      nJson is a ref struct for Json access in methods, it is a parse on demand format using spans to read data, no array allocations only returning deeper nJson bodies.
+		Provides access to classes JsonMemory and JsonSpan;
+		JsonMemory is a parse on insertion, readonly struct based memory plotter allocating only the array space required and the string data that needs to exist.
+		JsonSpan is a ref struct for Json access in methods, it is a parse on demand format using spans to read data, no array allocations only returning deeper JsonSpan bodies.
 
-      Enumerators are included for Foreach looping however no support for IEnumerator.
-      Support of object in object path index. For example 'value["object.value"]' is the equivalent of 'this["object"]["value"]'.
-    </Description>
+		Enumerators are included for Foreach looping however no support for IEnumerator.
+		Support of object in object path index. For example 'value["object.value"]' is the equivalent of 'this["object"]["value"]'.
+	</Description>
     <Authors>ScoredOne</Authors>
-    <PackageTags>Json</PackageTags>
+    <PackageTags>Json;Parser;Writer;NanoJson;Memory;Span;Tiny;Low-allocation</PackageTags>
     <RepositoryUrl>https://github.com/ScoredOne/NanoJson</RepositoryUrl>
   </PropertyGroup>
   
