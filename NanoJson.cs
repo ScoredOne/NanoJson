@@ -211,7 +211,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndContainer();
+                                providedReader.AdvanceToNotWhiteSpace();
                                 break;
                             }
                         }
@@ -232,7 +232,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndContainer();
+                                providedReader.AdvanceToNotWhiteSpace();
                                 break;
                             }
                         }
@@ -471,8 +471,20 @@ namespace NanoJson {
                     this.IsEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    ReadOnlySpan<char> toCompare = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, reader.CurrentIndex - left));
-                    if (toCompare.Length == 4 && this.Value.Equals(toCompare, StringComparison.OrdinalIgnoreCase)) {
+                    int right = reader.CurrentIndex - left;
+
+                    if (right == 4) {
+                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
+                        ushort c = data[1];
+                        if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+                            c = data[2];
+                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                c = data[3];
+                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                    return;
+                                }
+                            }
+                        }
                         return;
                     }
 
@@ -485,8 +497,20 @@ namespace NanoJson {
                     this.IsEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    ReadOnlySpan<char> toCompare = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, reader.CurrentIndex - left));
-                    if (toCompare.Length == 4 && this.Value.Equals(toCompare, StringComparison.OrdinalIgnoreCase)) {
+                    int right = reader.CurrentIndex - left;
+
+                    if (right == 4) {
+                        ReadOnlySpan<ushort> toCompare = reader.Slice(left, right);
+                        ushort c = toCompare[1];
+                        if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
+                            c = toCompare[2];
+                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+                                c = toCompare[3];
+                                if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+                                    return;
+                                }
+                            }
+                        }
                         return;
                     }
 
@@ -499,9 +523,22 @@ namespace NanoJson {
                     this.IsEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    ReadOnlySpan<char> toCompare = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, reader.CurrentIndex - left));
-                    if (toCompare.Length == 5 && this.Value.Equals(toCompare, StringComparison.OrdinalIgnoreCase)) {
-                        return;
+                    int right = reader.CurrentIndex - left;
+                    if (right == 5) {
+                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
+                        ushort c = data[1];
+                        if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
+                            c = data[2];
+                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                c = data[3];
+                                if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
+                                    c = data[4];
+                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
@@ -583,7 +620,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndContainer();
+                                providedReader.AdvanceToNotWhiteSpace();
                                 break;
                             }
                         }
@@ -606,7 +643,7 @@ namespace NanoJson {
                             case RBRACKET:
                                 break;
                             default: {
-                                providedReader.AdvanceToCommaOrEndContainer();
+                                providedReader.AdvanceToNotWhiteSpace();
                                 break;
                             }
                         }
@@ -667,7 +704,7 @@ namespace NanoJson {
                     case RBRACKET:
                         break;
                     default: {
-                        providedReader.AdvanceToCommaOrEndContainer();
+                        providedReader.AdvanceToNotWhiteSpace();
                         break;
                     }
                 }
@@ -1279,7 +1316,7 @@ namespace NanoJson {
                                 ++left;
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
-                                ushort advance = reader.AdvanceToCommaOrEndContainer();
+                                ushort advance = reader.AdvanceToNotWhiteSpace();
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
@@ -1300,7 +1337,7 @@ namespace NanoJson {
                                 newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                switch (reader.AdvanceToCommaOrEndBracket()) {
+                                switch (reader.AdvanceToNotWhiteSpace()) {
                                     case RBRACKET:
                                         goto ReadComplete;
                                     case COMMA:
@@ -1310,10 +1347,7 @@ namespace NanoJson {
                                 throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
                             default: {
-                                ushort advanced = reader.AdvanceToCommaOrEndContainer();
-                                int continuation = reader.CurrentIndex + 1;
-                                reader.RetreatToNotWhiteSpace();
-                                reader.Increment();
+                                reader.AdvanceToValueEnding();
                                 bTemp = bufPos;
                                 ReadOnlySpan<char> data = reference.Span;
                                 switch (leftChar) {
@@ -1384,10 +1418,9 @@ namespace NanoJson {
                                 ++bufPos;
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                if (advanced == RBRACKET) {
+                                if (reader.CurrentValue == RBRACKET || reader.AdvanceToNotWhiteSpace() == RBRACKET) {
                                     goto ReadComplete;
                                 }
-                                reader.SetIndexPosition(continuation);
                                 reader.AdvanceToNotWhiteSpace();
                                 continue;
                             }
@@ -1443,12 +1476,8 @@ namespace NanoJson {
                             nameL = 0;
                             nameR = 0;
                         }
-                        do {
-                            reader.Increment();
-                        } while (reader.CurrentValue == COLON);
-                        if (IsWhiteSpace(reader.CurrentValue)) {
-                            reader.AdvanceToNotWhiteSpace();
-                        }
+                        reader.AdvanceTo(COLON);
+                        reader.AdvanceToNotWhiteSpace();
                         left = reader.CurrentIndex;
                         ushort leftChar = reader.CurrentValue;
 
@@ -1457,7 +1486,7 @@ namespace NanoJson {
                                 left++;
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
-                                ushort advance = reader.AdvanceToCommaOrEndContainer();
+                                ushort advance = reader.AdvanceToNotWhiteSpace();
                                 bTemp = bufPos;
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
                                 ++bufPos;
@@ -1478,7 +1507,7 @@ namespace NanoJson {
                                 newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                switch (reader.AdvanceToCommaOrEndBrace()) {
+                                switch (reader.AdvanceToNotWhiteSpace()) {
                                     case RBRACE:
                                         goto ReadComplete;
                                     case COMMA:
@@ -1487,10 +1516,7 @@ namespace NanoJson {
                                 throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                             }
                             default: {
-                                ushort advanced = reader.AdvanceToCommaOrEndContainer();
-                                int continuation = reader.CurrentIndex + 1;
-                                reader.RetreatToNotWhiteSpace();
-                                reader.Increment();
+                                reader.AdvanceToValueEnding();
                                 bTemp = bufPos;
                                 ReadOnlySpan<char> data = reference.Span;
                                 switch (leftChar) {
@@ -1561,10 +1587,9 @@ namespace NanoJson {
                                 ++bufPos;
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
-                                if (advanced == RBRACE) {
+                                if (reader.CurrentValue == RBRACE || reader.AdvanceToNotWhiteSpace() == RBRACE) {
                                     goto ReadComplete;
                                 }
-                                reader.SetIndexPosition(continuation);
                                 continue;
                             }
                         }
@@ -1596,9 +1621,16 @@ namespace NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CurrentIndex - left;
                     if (right == 4) {
-                        ReadOnlySpan<char> data = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right));
-                        if (this.ReferenceData.Span.Equals(data, StringComparison.OrdinalIgnoreCase)) {
-                            return;
+                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
+                        ushort c = data[1];
+                        if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+                            c = data[2];
+                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                c = data[3];
+                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                    return;
+                                }
+                            }
                         }
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
@@ -1614,9 +1646,16 @@ namespace NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CurrentIndex - left;
                     if (right == 4) {
-                        ReadOnlySpan<char> data = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right));
-                        if (this.ReferenceData.Span.Equals(data, StringComparison.OrdinalIgnoreCase)) {
-                            return;
+                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
+                        ushort c = data[1];
+                        if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
+                            c = data[2];
+                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
+                                c = data[3];
+                                if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+                                    return;
+                                }
+                            }
                         }
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
@@ -1632,9 +1671,19 @@ namespace NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CurrentIndex - left;
                     if (right == 5) {
-                        ReadOnlySpan<char> data = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right));
-                        if (this.ReferenceData.Span.Equals(data, StringComparison.OrdinalIgnoreCase)) {
-                            return;
+                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
+                        ushort c = data[1];
+                        if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
+                            c = data[2];
+                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
+                                c = data[3];
+                                if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
+                                    c = data[4];
+                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
+                                        return;
+                                    }
+                                }
+                            }
                         }
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
@@ -1657,6 +1706,7 @@ namespace NanoJson {
 
             throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
         }
+
         private JsonMemory(in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
 
         private JsonMemory(in ReadOnlyMemory<char> key, in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) {
@@ -2900,7 +2950,6 @@ namespace NanoJson {
 
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
-        public readonly int SourceLen;
 
         public int CurrentIndex { get; private set; }
 
@@ -2912,8 +2961,7 @@ namespace NanoJson {
 
         public JsonReader(in ReadOnlySpan<char> data, bool fromEnd = false) {
             this.source = MemoryMarshal.Cast<char, ushort>(data);
-            this.SourceLen = data.Length;
-            this.endIndex = this.SourceLen - 1;
+            this.endIndex = data.Length - 1;
 
             if (fromEnd) {
                 this.CurrentIndex = data.Length;
@@ -2977,16 +3025,18 @@ namespace NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetIndexToEnd() {
-            this.CurrentIndex = this.SourceLen;
+            this.CurrentIndex = this.endIndex + 1;
         }
 
         #region # ADVANCE #
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort Advance(int amount = 1) {
             while (this.Increment() && --amount > 0) { }
             return this.CurrentValue;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceTo(ushort search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -2994,7 +3044,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3020,6 +3070,7 @@ namespace NanoJson {
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceToNot(ushort search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3027,7 +3078,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3052,6 +3103,7 @@ namespace NanoJson {
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceTo(in ReadOnlySpan<ushort> search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3063,7 +3115,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3092,6 +3144,7 @@ namespace NanoJson {
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNot(in ReadOnlySpan<ushort> search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3103,7 +3156,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3131,6 +3184,7 @@ namespace NanoJson {
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3138,7 +3192,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3151,7 +3205,7 @@ namespace NanoJson {
                 }
                 else {
                     for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0) {
+                        if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
                             this.CurrentIndex += i;
                             return this.CurrentValue;
                         }
@@ -3163,6 +3217,7 @@ namespace NanoJson {
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNotWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3170,7 +3225,7 @@ namespace NanoJson {
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
@@ -3183,7 +3238,7 @@ namespace NanoJson {
                 }
                 else {
                     for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0) {
+                        if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
                             this.CurrentIndex += i;
                             return this.CurrentValue;
                         }
@@ -3195,151 +3250,32 @@ namespace NanoJson {
             return '\0';
         }
 
-        public ushort AdvanceToCommaOrEndBrace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
-            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
-                new Vector<ushort>(COMMA),
-                new Vector<ushort>(RBRACE),
-            };
-            int searchLen = searchVectors.Length;
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
-            while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
-                    buf.Clear();
-                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
-                }
-                else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
-                }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
-                for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
-                }
-                if (eq == Vector<ushort>.Zero) {
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
-                    }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-            }
-            return '\0';
-        }
-
-        public ushort AdvanceToCommaOrEndBracket() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
-            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
-                new Vector<ushort>(COMMA),
-                new Vector<ushort>(RBRACKET),
-            };
-            int searchLen = searchVectors.Length;
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
-            while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
-                    buf.Clear();
-                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
-                }
-                else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
-                }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
-                for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
-                }
-                if (eq == Vector<ushort>.Zero) {
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
-                    }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-            }
-            return '\0';
-        }
-
-        public ushort AdvanceToCommaOrEndContainer() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
-            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
-                new Vector<ushort>(COMMA),
-                new Vector<ushort>(RBRACE),
-                new Vector<ushort>(RBRACKET),
-            };
-            int searchLen = searchVectors.Length;
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
-            while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
-                    buf.Clear();
-                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
-                }
-                else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
-                }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
-                for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
-                }
-                if (eq == Vector<ushort>.Zero) {
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
-                    }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
-                }
-            }
-            return '\0';
-        }
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToValueEnding() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
-            Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
-                new Vector<ushort>(COMMA),
-                new Vector<ushort>(RBRACE),
-                new Vector<ushort>(RBRACKET),
-            };
-            Vector<ushort> whitespace = new Vector<ushort>(32);
-            int searchLen = searchVectors.Length;
+            Vector<ushort> commaVector = new Vector<ushort>(COMMA);
+            Vector<ushort> rbraceVector = new Vector<ushort>(RBRACE);
+            Vector<ushort> rbracketVector = new Vector<ushort>(RBRACKET);
+            Vector<ushort> whitespace = new Vector<ushort>(33);
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
-                if (this.CurrentIndex + segment >= this.SourceLen) {
+                if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.LessThan(toCompare, whitespace);
-                for (int i = 0; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
-                }
+                Vector<ushort> eq = Vector.BitwiseOr(
+                    Vector.LessThan(toCompare, whitespace),
+                    Vector.BitwiseOr(
+                        Vector.BitwiseOr(
+                            Vector.Equals(toCompare, commaVector),
+                            Vector.Equals(toCompare, rbracketVector)
+                            ),
+                        Vector.Equals(toCompare, rbraceVector)));
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
@@ -3347,8 +3283,11 @@ namespace NanoJson {
                 else {
                     for (int i = 0; i < segment; i++) {
                         if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
+                            ushort current = buf[i];
+                            if (current == COMMA || IsWhiteSpace(current) || current == RBRACE || current == RBRACKET) {
+                                this.CurrentIndex += i;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3358,6 +3297,7 @@ namespace NanoJson {
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceToEndOfObject() {
             if (this.CurrentValue != LBRACE) {
                 this.AdvanceTo(LBRACE);
@@ -3450,6 +3390,7 @@ namespace NanoJson {
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceToEndOfArray() {
             if (this.CurrentValue != LBRACKET) {
                 this.AdvanceTo(LBRACKET);
@@ -3719,7 +3660,7 @@ namespace NanoJson {
                 }
                 else {
                     for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0) {
+                        if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
                             this.CurrentIndex = start + i;
                             return this.CurrentValue;
                         }
@@ -3752,7 +3693,7 @@ namespace NanoJson {
                 }
                 else {
                     for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0) {
+                        if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
                             this.CurrentIndex = start + i;
                             return this.CurrentValue;
                         }
@@ -3967,7 +3908,7 @@ namespace NanoJson {
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsWhiteSpace(ushort character) {
-            return character < 33 && (JSONWHITESPACEMASK & (1UL << character)) != 0;
+            return (JSONWHITESPACEMASK & (1UL << character)) != 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
