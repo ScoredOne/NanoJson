@@ -3808,6 +3808,8 @@ namespace NanoJson {
         internal const ushort S_LOWER = 's';
         internal const ushort S_UPPER = 'S';
 
+        public const ulong JSONWHITESPACEMASK = (1UL << 9) | (1UL << 10) | (1UL << 13) | (1UL << 32);
+
         /// <summary>
         /// Format used by the basic <c>.ToString()</c>
         /// </summary>
@@ -3955,17 +3957,17 @@ namespace NanoJson {
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsWhiteSpace(char character) {
-            return character < 33;
+            return IsWhiteSpace((ushort)character);
         }
 
         /// <summary>
-        /// Returns true if char value is less than 33
+        /// Returns true if char value complies with <c>RFC 8259</c> for a whitespace character
         /// </summary>
         /// <param name="character"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsWhiteSpace(ushort character) {
-            return character < 33;
+            return character < 33 && (JSONWHITESPACEMASK & (1UL << character)) != 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
