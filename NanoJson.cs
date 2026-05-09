@@ -4218,13 +4218,22 @@ namespace NanoJson {
     public enum ToStringFormat : long {
         None = 0,
         Pretty = 0x1,
+        /// <summary>
+        /// Translates Unicode inside strings to their actual character representation
+        /// </summary>
         TranslateUnicode = 0x2,
+        /// <summary>
+        /// The Default C# Bool is <c>True</c> and <c>False</c>, this option changes the output to <c>true</c> and <c>false</c> to comply with JSON standards, this option is ignored when parsing as both are accepted
+        /// </summary>
         LowerCaseBool = 0x4,
         /// <summary>
         /// Numbers already pass the numerical test for validity, this option gets the number representation from <c>double</c> instead of the reference
         /// </summary>
         ReParseNumbers = 0x8,
 
+        /// <summary>
+        /// Starting value of <c>Default_ToStringFormat</c>
+        /// </summary>
         Default = Pretty | TranslateUnicode,
         All = Pretty | TranslateUnicode | LowerCaseBool | ReParseNumbers,
     }
@@ -4301,7 +4310,26 @@ namespace NanoJson {
                 return JsonMemory.CreateArray(key, array);
             }
         }
-    }
 
+        public static JsonMemory AsJsonMemory(this string str) {
+            return JsonMemory.CreateString(str);
+        }
+
+        public static JsonSpan AsJsonSpan(this string str) {
+            return new JsonSpan(str);
+        }
+
+        public static JsonMemory AsJsonMemory(this double number) {
+            return JsonMemory.CreateNumber(number);
+        }
+
+        public static JsonMemory AsJsonMemory(this bool b) {
+            return JsonMemory.CreateBool(b);
+        }
+
+        public static JsonMemory ParseJson(this string json) {
+            return JsonMemory.ParseJson(json);
+        }
+    }
     #endregion
 }

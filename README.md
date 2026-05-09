@@ -69,7 +69,7 @@ ParseToSingleValue	= Create object of library and parse json file into it. Recei
 Minimal allocation without compromise on time.  
 Access constructors via static JsonMemory.ParseJson ext.  
 Object and Array types both accessible via indexer, dictionary is not implemented.  
-Object and Array types both accessible via foreach, IEnumerator not supported, uses custom Enumerator.  
+Object and Array types both accessible via foreach.
 Object type can also be accessed via key search. Furthermore, you can include a seperator (for example 'object.value') in your string and it will aquire the internal value.  
 
 ### Creating JsonMemory Types
