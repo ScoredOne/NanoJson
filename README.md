@@ -112,7 +112,7 @@ private void Function(string jsonData) {
     JMemory2.Dispose(); // Dispose of the arrays when no longer needed at your own leisure
 }
 ```
-This is not required as the provided arrays are wrapped inside a container class the returns them with a finaliser, however disposing them manually retains the speed benefits.
+This is not required as the provided arrays are wrapped inside a container class that returns them with the finaliser, however disposing them manually retains the speed benefits.
 
 ## JsonMemory arrays
 JsonMemory objects and arrays are built using standard arrays, create the objects you want into a container and then use an Extension or static method for creating a Object or an Array with the array.
