@@ -3730,7 +3730,7 @@ namespace NanoJson {
         /// <summary>
         /// Format used by the basic <c>.ToString()</c>
         /// </summary>
-        public static ToStringFormat Default_ToStringFormat = ToStringFormat.Pretty | ToStringFormat.TranslateUnicode;
+        public static ToStringFormat Default_ToStringFormat = ToStringFormat.Default;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
