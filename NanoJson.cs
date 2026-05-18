@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.4                                      ///
+///     Version: 1.3.5                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -767,6 +767,37 @@ namespace NanoJson {
             bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
 
+            switch (this.Type) {
+                case JsonType.String:
+                    if (translateUnicode) {
+                        return this.GetStringDecoded;
+                    }
+                    else {
+                        return this.GetStringLiteral;
+                    }
+                case JsonType.Null:
+                    if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                        return null;
+                    }
+                    else {
+                        return NULL;
+                    }
+                case JsonType.Number:
+                    if (reparseNumbers) {
+                        return this.GetNumberString;
+                    }
+                    else {
+                        return this.GetStringLiteral;
+                    }
+                case JsonType.Boolean:
+                    if (this.Value[0] == 'T') {
+                        return lowerCaseBool ? TRUE_l : TRUE_u;
+                    }
+                    else {
+                        return lowerCaseBool ? FALSE_l : FALSE_u;
+                    }
+            }
+
             char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * INDENT_LEN + 64); // 0 returns empty array?
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
             string builtString = buffer.AsSpan().Slice(0, pos).ToString();
@@ -1014,76 +1045,17 @@ namespace NanoJson {
             get
             {
                 double returnNumber = double.NaN;
-                if (this.GetLength > 0 && HasFlag((long)this.Type, (long)JsonType.Number)) {
-                    int len = this.GetLength;
-                    int pos = 0;
-
-                    // handle sign
-                    char c = this.Value[pos];
-                    bool negative = c == '-';
-                    if (negative || c == '+') {
-                        pos++;
-                    }
-
-                    // find 'e' or 'E' for exponent (if any)
-                    int eIndex = -1;
-                    for (int x = pos; x < len; x++) {
-                        c = this.Value[x];
-                        if (c == 'e' || c == 'E') {
-                            eIndex = x;
-                            break;
-                        }
-                    }
-
-                    // main part (integer + fractional) excludes exponent
-                    ReadOnlySpan<char> mainSpan = eIndex > 0 ? this.Value.Slice(pos, eIndex - pos) : this.Value.Slice(pos);
-
-                    // parse integer and fractional parts precisely
-                    double value = 0.0d;
-                    bool seenDecimal = false;
-                    double fracDiv = 1.0;
-                    for (int x = 0; x < mainSpan.Length; x++) {
-                        c = mainSpan[x];
-                        if (c == '.') {
-                            seenDecimal = true;
-                            continue;
-                        }
-                        int digit = ReadHexNumber(c); // expects '0'..'9'
-                        if (!seenDecimal) {
-                            value = value * 10.0 + digit;
-                        }
-                        else {
-                            fracDiv *= 10.0;
-                            value += digit / fracDiv;
-                        }
-                    }
-
-                    // parse exponent (if present) and apply
-                    if (eIndex > 0) {
-                        int expPos = eIndex + 1;
-                        bool expNegative = false;
-                        if (expPos < len) {
-                            char ec = this.Value[expPos];
-                            expNegative = ec == '-';
-                            if (expNegative || ec == '+') {
-                                expPos++;
-                            }
-                        }
-                        int expVal = 0;
-                        for (int x = expPos; x < len; x++) {
-                            expVal = expVal * 10 + ReadHexNumber(this.Value[x]);
-                        }
-                        if (expNegative) {
-                            expVal = -expVal;
-                        }
-                        value *= Math.Pow(10.0, expVal);
-                    }
-
-                    returnNumber = negative ? -value : value;
+                if (HasFlag((long)this.Type, (long)JsonType.Number)) {
+                    returnNumber = ParseNumber(this.Value);
                 }
                 return returnNumber;
             }
         }
+
+        /// <summary>
+        /// Get the number contained inside This object and parse it tostring
+        /// </summary>
+        private readonly string GetNumberString => this.GetNumber.ToString();
 
         /// <summary>
         /// Get the number contained inside This object
@@ -1919,7 +1891,11 @@ namespace NanoJson {
                         return this.GetStringLiteral;
                     }
                 case JsonType.Null:
-                    return NULL;
+                    if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                        return null;
+                    } else {
+                        return NULL;
+                    }
                 case JsonType.Number:
                     if (reparseNumbers) {
                         return this.GetNumberString;
@@ -4230,6 +4206,10 @@ namespace NanoJson {
         /// Numbers already pass the numerical test for validity, this option gets the number representation from <c>double</c> instead of the reference
         /// </summary>
         ReParseNumbers = 0x8,
+        /// <summary>
+        /// Null values will be represented as empty references instead of the string "null", this is not compliant with JSON standards but can be useful for some applications, objects and arrays will still represent null values within them as the string "null"
+        /// </summary>
+        NullReturnsEmptyReference = 0x10,
 
         /// <summary>
         /// Starting value of <c>Default_ToStringFormat</c>
