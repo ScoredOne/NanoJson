@@ -1768,30 +1768,28 @@ namespace NanoJson {
             this.InnerLength = 0;
         }
 
+        /// <summary>
+        /// Default Dispose method, disposes this and all sub-objects if this was created using rented space, otherwise does nothing.
+        /// </summary>
         public void Dispose() => this.Dispose(true);
 
         /// <summary>
-        /// 
+        /// Disposes the current object and its sub-objects if specified.
         /// </summary>
         /// <param name="includingSubObjects">If this object will dispose everything or just itself</param>
         public void Dispose(bool includingSubObjects = true) {
-            static void CycleEach(in JsonMemory container) {
-                for (int x = 0; x < container.InnerLength; x++) {
-                    ref readonly JsonMemory next = ref container[x];
-                    if (HasFlag((long)JsonType.Container, (long)next.Type)) {
-                        CycleEach(in next);
-                        if (next.InnerValues is JsonContainerPool.RentedContainer rc) { // Return after cycled
-                            rc.Dispose();
-                        }
-                    }
-                }
-            }
-
             if (includingSubObjects) {
-                CycleEach(in this);
+                CycleDisposeEach(in this);
             }
             if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
                 rc.Dispose();
+            }
+        }
+
+        private static void CycleDisposeEach(in JsonMemory container) {
+            for (int x = 0; x < container.InnerLength; x++) {
+                ref readonly JsonMemory next = ref container[x];
+                next.Dispose(true);
             }
         }
 
@@ -1893,7 +1891,8 @@ namespace NanoJson {
                 case JsonType.Null:
                     if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
                         return null;
-                    } else {
+                    }
+                    else {
                         return NULL;
                     }
                 case JsonType.Number:
