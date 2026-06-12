@@ -1778,7 +1778,7 @@ namespace NanoJson {
         /// </summary>
         /// <param name="includingSubObjects">If this object will dispose everything or just itself</param>
         public void Dispose(bool includingSubObjects = true) {
-            if (includingSubObjects) {
+            if (includingSubObjects && this.InnerLength > 0 ) {
                 CycleDisposeEach(in this);
             }
             if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
