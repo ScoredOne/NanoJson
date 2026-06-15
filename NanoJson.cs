@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.5                                      ///
+///     Version: 1.3.6                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -25,9 +25,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-using static NanoJson.NanoJsonStatics;
+using static ScoredProductions.NanoJson.NanoJsonStatics;
 
-namespace NanoJson {
+namespace ScoredProductions.NanoJson {
 
     #region ### JsonSpan ###
 

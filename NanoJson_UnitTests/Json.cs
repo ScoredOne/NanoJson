@@ -1,6 +1,6 @@
-﻿using NanoJson;
+﻿using ScoredProductions.NanoJson;
 
-namespace NanoJson_UnitTests {
+namespace ScoredProductions.NanoJson_UnitTests {
 	[TestClass]
 	public sealed class Json {
 
