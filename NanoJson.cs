@@ -1276,9 +1276,7 @@ namespace ScoredProductions.NanoJson {
                     }
 
                     int bufPos = bufferIndex;
-                    int bTemp;
 
-                    JsonMemory newValue;
                     while (true) {
                         left = reader.CurrentIndex;
                         ushort leftChar = reader.CurrentValue;
@@ -1289,11 +1287,8 @@ namespace ScoredProductions.NanoJson {
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
                                 ushort advance = reader.AdvanceToNotWhiteSpace();
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
-                                ++bufPos;
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
+                                JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
+                                existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.String, reference.Slice(left, r - left));
                                 if (advance == COMMA) {
                                     reader.AdvanceToNotWhiteSpace();
                                     continue;
@@ -1305,8 +1300,8 @@ namespace ScoredProductions.NanoJson {
                             }
                             case LBRACE:
                             case LBRACKET: {
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
+                                int bTemp = bufPos;
+                                JsonMemory newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 switch (reader.AdvanceToNotWhiteSpace()) {
@@ -1320,7 +1315,7 @@ namespace ScoredProductions.NanoJson {
                             }
                             default: {
                                 reader.AdvanceToValueEnding();
-                                bTemp = bufPos;
+                                JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
                                 ReadOnlySpan<char> data = reference.Span;
                                 switch (leftChar) {
                                     case N_LOWER:
@@ -1332,7 +1327,7 @@ namespace ScoredProductions.NanoJson {
                                                 if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
                                                     c = data[left + 3];
                                                     if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                        newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Null, NULL.AsMemory());
+                                                        existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Null, NULL.AsMemory());
                                                         break;
                                                     }
                                                 }
@@ -1349,7 +1344,7 @@ namespace ScoredProductions.NanoJson {
                                                 if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
                                                     c = data[left + 3];
                                                     if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                        newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.TrueString.AsMemory());
+                                                        existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.TrueString.AsMemory());
                                                         break;
                                                     }
                                                 }
@@ -1368,7 +1363,7 @@ namespace ScoredProductions.NanoJson {
                                                     if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
                                                         c = data[left + 4];
                                                         if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                            newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.FalseString.AsMemory());
+                                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.FalseString.AsMemory());
                                                             break;
                                                         }
                                                     }
@@ -1380,16 +1375,13 @@ namespace ScoredProductions.NanoJson {
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
                                         if (IsNumber(numberArea.Span)) {
-                                            newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Number, numberArea);
+                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Number, numberArea);
                                             break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
                                 }
 
-                                ++bufPos;
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
                                 if (reader.CurrentValue == RBRACKET || reader.AdvanceToNotWhiteSpace() == RBRACKET) {
                                     goto ReadComplete;
                                 }
@@ -1432,18 +1424,14 @@ namespace ScoredProductions.NanoJson {
                     }
 
                     int bufPos = bufferIndex;
-                    int bTemp;
-                    int nameL;
-                    int nameR;
-                    JsonMemory newValue;
 
                     while (true) {
                         if (reader.CurrentValue != QUOTE) {
                             reader.AdvanceTo(QUOTE);
                         }
-                        nameL = reader.CurrentIndex + 1;
+                        int nameL = reader.CurrentIndex + 1;
                         reader.AdvanceTo(QUOTE);
-                        nameR = reader.CurrentIndex - nameL;
+                        int nameR = reader.CurrentIndex - nameL;
                         if (nameR == 1) {
                             nameL = 0;
                             nameR = 0;
@@ -1459,11 +1447,8 @@ namespace ScoredProductions.NanoJson {
                                 reader.AdvanceTo(QUOTE);
                                 int r = reader.CurrentIndex;
                                 ushort advance = reader.AdvanceToNotWhiteSpace();
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
-                                ++bufPos;
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
+                                JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
+                                existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.String, reference.Slice(left, r - left));
                                 if (advance == COMMA) {
                                     reader.Increment();
                                     goto NextObject;
@@ -1475,8 +1460,8 @@ namespace ScoredProductions.NanoJson {
                             }
                             case LBRACE:
                             case LBRACKET: {
-                                bTemp = bufPos;
-                                newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
+                                int bTemp = bufPos;
+                                JsonMemory newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
                                 JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
                                 existingBuffer[bTemp] = newValue;
                                 switch (reader.AdvanceToNotWhiteSpace()) {
@@ -1489,7 +1474,7 @@ namespace ScoredProductions.NanoJson {
                             }
                             default: {
                                 reader.AdvanceToValueEnding();
-                                bTemp = bufPos;
+                                JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
                                 ReadOnlySpan<char> data = reference.Span;
                                 switch (leftChar) {
                                     case N_LOWER:
@@ -1501,7 +1486,7 @@ namespace ScoredProductions.NanoJson {
                                                 if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
                                                     c = data[left + 3];
                                                     if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                        newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Null, NULL.AsMemory());
+                                                        existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Null, NULL.AsMemory());
                                                         break;
                                                     }
                                                 }
@@ -1518,7 +1503,7 @@ namespace ScoredProductions.NanoJson {
                                                 if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
                                                     c = data[left + 3];
                                                     if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                        newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.TrueString.AsMemory());
+                                                        existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.TrueString.AsMemory());
                                                         break;
                                                     }
                                                 }
@@ -1537,7 +1522,7 @@ namespace ScoredProductions.NanoJson {
                                                     if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
                                                         c = data[left + 4];
                                                         if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                            newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.FalseString.AsMemory());
+                                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.FalseString.AsMemory());
                                                             break;
                                                         }
                                                     }
@@ -1549,16 +1534,13 @@ namespace ScoredProductions.NanoJson {
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
                                         if (IsNumber(numberArea.Span)) {
-                                            newValue = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Number, numberArea);
+                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Number, numberArea);
                                             break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                                     }
 
                                 }
-                                ++bufPos;
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
-                                existingBuffer[bTemp] = newValue;
                                 if (reader.CurrentValue == RBRACE || reader.AdvanceToNotWhiteSpace() == RBRACE) {
                                     goto ReadComplete;
                                 }
@@ -1778,7 +1760,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="includingSubObjects">If this object will dispose everything or just itself</param>
         public void Dispose(bool includingSubObjects = true) {
-            if (includingSubObjects && this.InnerLength > 0 ) {
+            if (includingSubObjects && this.InnerLength > 0) {
                 CycleDisposeEach(in this);
             }
             if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
@@ -1925,6 +1907,9 @@ namespace ScoredProductions.NanoJson {
         /// Recursive method to build the json ToString output
         /// </summary>
         private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, in bool reparseNumbers, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
+            const string NameConnector = "\": ";
+            const int NameConnectorLen = 3;
+
             switch (this.Type) {
                 case JsonType.String: {
                     EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
@@ -2020,9 +2005,8 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
+                            NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
+                            sbPos += NameConnectorLen;
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 2, ref sb);
                             sb[sbPos++] = ',';
@@ -2037,9 +2021,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
+                        NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
+                        sbPos += NameConnectorLen;
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                         EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                         sb[sbPos++] = '\n';
@@ -2057,9 +2040,8 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
+                            NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
+                            sbPos += NameConnectorLen;
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 1, ref sb);
                             sb[sbPos++] = ',';
@@ -2069,9 +2051,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
+                        NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
+                        sbPos += NameConnectorLen;
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                     }
 
@@ -3012,6 +2993,12 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ushort Advance() {
+            this.Increment();
+            return this.CurrentValue;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceTo(ushort search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3031,16 +3018,13 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus;
                     continue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentIndex;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] > 0) {
+                        this.CurrentIndex += i;
+                        return this.CurrentIndex;
                     }
-                    this.CurrentIndex += segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus;
             }
             return -1;
         }
@@ -3064,16 +3048,13 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentIndex;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] == 0) {
+                        this.CurrentIndex += i;
+                        return this.CurrentIndex;
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return -1;
         }
@@ -3105,16 +3086,13 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] > 0) {
+                        this.CurrentIndex += i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return '\0';
         }
@@ -3145,16 +3123,13 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] == 0) {
+                        this.CurrentIndex += i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return '\0';
         }
@@ -3178,16 +3153,13 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
+                        this.CurrentIndex += i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return '\0';
         }
@@ -3211,16 +3183,13 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
-                            this.CurrentIndex += i;
-                            return this.CurrentValue;
-                        }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
+                        this.CurrentIndex += i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return '\0';
         }
@@ -3255,19 +3224,16 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                else {
-                    for (int i = 0; i < segment; i++) {
-                        if (eq[i] > 0) {
-                            ushort current = buf[i];
-                            if (current == COMMA || IsWhiteSpace(current) || current == RBRACE || current == RBRACKET) {
-                                this.CurrentIndex += i;
-                                return this.CurrentValue;
-                            }
+                for (int i = 0; i < segment; i++) {
+                    if (eq[i] > 0) {
+                        ushort current = buf[i];
+                        if (current == COMMA || IsWhiteSpace(current) || current == RBRACE || current == RBRACKET) {
+                            this.CurrentIndex += i;
+                            return this.CurrentValue;
                         }
                     }
-                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
             }
             return '\0';
         }
@@ -3306,17 +3272,14 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    else {
-                        for (int i = 0; i < segment; i++) {
-                            if (eq[i] > 0) {
-                                WithinQuotes = false;
-                                this.CurrentIndex += i; // One Place after Quote
-                                goto Continue;
-                            }
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            WithinQuotes = false;
+                            this.CurrentIndex += i; // One Place after Quote
+                            goto Continue;
                         }
-                        this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                        continue;
                     }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                 }
                 else {
                     for (int i = 1; i < searchLen; i++) {
@@ -3326,41 +3289,37 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    else {
-                        for (int i = 0; i < segment; i++) {
-                            if (eq[i] > 0) {
-                                ushort ch = buf[i];
-                                switch (ch) {
-                                    case QUOTE: {
-                                        WithinQuotes = true;
-                                        this.CurrentIndex += i; // One Place after Quote
-                                        goto Continue;
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            ushort ch = buf[i];
+                            switch (ch) {
+                                case QUOTE: {
+                                    WithinQuotes = true;
+                                    this.CurrentIndex += i; // One Place after Quote
+                                    goto Continue;
+                                }
+                                case LBRACE:
+                                case LBRACKET: {
+                                    debth++;
+                                    break;
+                                }
+                                case RBRACKET: {
+                                    debth--;
+                                    break;
+                                }
+                                case RBRACE: {
+                                    if (--debth == 0) {
+                                        this.CurrentIndex += i;
+                                        return this.CurrentValue;
                                     }
-                                    case LBRACE:
-                                    case LBRACKET: {
-                                        debth++;
-                                        break;
-                                    }
-                                    case RBRACKET: {
-                                        debth--;
-                                        break;
-                                    }
-                                    case RBRACE: {
-                                        if (--debth == 0) {
-                                            this.CurrentIndex += i;
-                                            return this.CurrentValue;
-                                        }
-                                        break;
-                                    }
+                                    break;
                                 }
                             }
-
                         }
-                        this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                        continue;
-                    }
-                }
 
+                    }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                }
             }
             return '\0';
         }
@@ -3399,17 +3358,14 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    else {
-                        for (int i = 0; i < segment; i++) {
-                            if (eq[i] > 0) {
-                                WithinQuotes = false;
-                                this.CurrentIndex += i; // One Place after Quote
-                                goto Continue;
-                            }
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            WithinQuotes = false;
+                            this.CurrentIndex += i; // One Place after Quote
+                            goto Continue;
                         }
-                        this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                        continue;
                     }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                 }
                 else {
                     for (int i = 1; i < searchLen; i++) {
@@ -3419,38 +3375,35 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    else {
-                        for (int i = 0; i < segment; i++) {
-                            if (eq[i] > 0) {
-                                ushort ch = buf[i];
-                                switch (ch) {
-                                    case QUOTE: {
-                                        WithinQuotes = true;
-                                        this.CurrentIndex += i; // One Place after Quote
-                                        goto Continue;
+                    for (int i = 0; i < segment; i++) {
+                        if (eq[i] > 0) {
+                            ushort ch = buf[i];
+                            switch (ch) {
+                                case QUOTE: {
+                                    WithinQuotes = true;
+                                    this.CurrentIndex += i; // One Place after Quote
+                                    goto Continue;
+                                }
+                                case LBRACE:
+                                case LBRACKET: {
+                                    debth++;
+                                    break;
+                                }
+                                case RBRACE: {
+                                    debth--;
+                                    break;
+                                }
+                                case RBRACKET: {
+                                    if (--debth == 0) {
+                                        this.CurrentIndex += i;
+                                        return this.CurrentValue;
                                     }
-                                    case LBRACE:
-                                    case LBRACKET: {
-                                        debth++;
-                                        break;
-                                    }
-                                    case RBRACE: {
-                                        debth--;
-                                        break;
-                                    }
-                                    case RBRACKET: {
-                                        if (--debth == 0) {
-                                            this.CurrentIndex += i;
-                                            return this.CurrentValue;
-                                        }
-                                        break;
-                                    }
+                                    break;
                                 }
                             }
                         }
-                        this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-                        continue;
                     }
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                 }
             }
             return '\0';
@@ -3461,11 +3414,19 @@ namespace ScoredProductions.NanoJson {
 
         #region # RETREAT #
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort Retreat(int amount = 1) {
             while (this.Decrement() && --amount > 0) { }
             return this.CurrentValue;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ushort Retreat() {
+            this.Decrement();
+            return this.CurrentValue;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int RetreatTo(ushort search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3486,20 +3447,18 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex -= segmentMinus;
                     continue;
                 }
-                else {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentIndex;
-                        }
+                for (int i = segmentMinus; i >= 0; i--) {
+                    if (eq[i] > 0) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentIndex;
                     }
-                    this.CurrentIndex -= segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus;
             }
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int RetreatToNot(ushort search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3519,20 +3478,18 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
-                else {
-                    for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentIndex;
-                        }
+                for (int i = segment - 1; i >= 0; i--) {
+                    if (eq[i] == 0) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentIndex;
                     }
-                    this.CurrentIndex -= segmentMinus; // Segments is one base so dont increment
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus; // Segments is one base so dont increment
             }
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatTo(in ReadOnlySpan<ushort> search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3560,20 +3517,18 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex -= segmentMinus;
                     continue;
                 }
-                else {
-                    for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentValue;
-                        }
+                for (int i = segment - 1; i >= 0; i--) {
+                    if (eq[i] > 0) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex -= segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus;
             }
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToNot(in ReadOnlySpan<ushort> search) {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3600,20 +3555,18 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentValue;
-                        }
+                for (int i = segment - 1; i >= 0; i--) {
+                    if (eq[i] == 0) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex -= segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus;
             }
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3633,20 +3586,18 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentValue;
-                        }
+                for (int i = segment - 1; i >= 0; i--) {
+                    if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex -= segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus;
             }
             return '\0';
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToNotWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
@@ -3666,16 +3617,13 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                else {
-                    for (int i = segment - 1; i >= 0; i--) {
-                        if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
-                            this.CurrentIndex = start + i;
-                            return this.CurrentValue;
-                        }
+                for (int i = segment - 1; i >= 0; i--) {
+                    if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
+                        this.CurrentIndex = start + i;
+                        return this.CurrentValue;
                     }
-                    this.CurrentIndex -= segmentMinus;
-                    continue;
                 }
+                this.CurrentIndex -= segmentMinus;
             }
             return '\0';
         }
