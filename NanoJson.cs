@@ -427,41 +427,39 @@ namespace ScoredProductions.NanoJson {
                 case LBRACKET: {
                     this.Type = JsonType.Array;
                     int left = reader.CurrentIndex;
-                    reader.AdvanceToEndOfArray();
-                    if (reader.CurrentValue != RBRACKET) {
-                        throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    if (reader.AdvanceToNotWhiteSpace() == RBRACKET) {
+                        this.IsEmpty = true;
+                    }
+                    else {
+                        this.IsEmpty = false;
+                        reader.SetIndexPosition(left);
+                        reader.AdvanceToEndOfArray();
+                        if (reader.CurrentValue != RBRACKET) {
+                            throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                        }
                     }
                     reader.Increment();
                     ReadOnlySpan<ushort> container = reader.Slice(left, reader.CurrentIndex - left);
                     this.Value = MemoryMarshal.Cast<ushort, char>(container);
-                    this.IsEmpty = true;
-                    int end = container.Length - 1;
-                    for (int x = 1; x < end; x++) {
-                        if (!IsWhiteSpace(container[x])) {
-                            this.IsEmpty = false;
-                            return;
-                        }
-                    }
                     return;
                 }
                 case LBRACE: {
                     this.Type = JsonType.Object;
                     int left = reader.CurrentIndex;
-                    reader.AdvanceToEndOfObject();
-                    if (reader.CurrentValue != RBRACE) {
-                        throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    if (reader.AdvanceToNotWhiteSpace() == RBRACE) {
+                        this.IsEmpty = true;
+                    }
+                    else {
+                        this.IsEmpty = false;
+                        reader.SetIndexPosition(left);
+                        reader.AdvanceToEndOfObject();
+                        if (reader.CurrentValue != RBRACE) {
+                            throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                        }
                     }
                     reader.Increment();
                     ReadOnlySpan<ushort> container = reader.Slice(left, reader.CurrentIndex - left);
                     this.Value = MemoryMarshal.Cast<ushort, char>(container);
-                    this.IsEmpty = true;
-                    int end = container.Length - 1;
-                    for (int x = 1; x < end; x++) {
-                        if (!IsWhiteSpace(container[x])) {
-                            this.IsEmpty = false;
-                            return;
-                        }
-                    }
                     return;
                 }
                 case N_LOWER:
@@ -798,7 +796,7 @@ namespace ScoredProductions.NanoJson {
                     }
             }
 
-            char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * INDENT_LEN + 64); // 0 returns empty array?
+            char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * INDENT_LEN);
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
             string builtString = buffer.AsSpan().Slice(0, pos).ToString();
             ArrayPool<char>.Shared.Return(buffer);
@@ -896,9 +894,8 @@ namespace ScoredProductions.NanoJson {
                                 sb[sbPos++] = '"';
                                 prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
                                 sbPos += prior.GetKeyLen;
-                                sb[sbPos++] = '"';
-                                sb[sbPos++] = ':';
-                                sb[sbPos++] = ' ';
+                                NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                                sbPos += NAMECONNECTORLEN;
                                 prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 EnsureBufferCapacity(sbPos + 2, ref sb);
                                 sb[sbPos++] = ',';
@@ -914,9 +911,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
                         sbPos += current.GetKeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
+                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                        sbPos += NAMECONNECTORLEN;
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                         EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
                         sb[sbPos++] = '\n';
@@ -935,9 +931,8 @@ namespace ScoredProductions.NanoJson {
                                 sb[sbPos++] = '"';
                                 prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
                                 sbPos += prior.GetKeyLen;
-                                sb[sbPos++] = '"';
-                                sb[sbPos++] = ':';
-                                sb[sbPos++] = ' ';
+                                NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                                sbPos += NAMECONNECTORLEN;
                                 prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 EnsureBufferCapacity(sbPos + 1, ref sb);
                                 sb[sbPos++] = ',';
@@ -948,9 +943,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
                         sbPos += current.GetKeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
+                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                        sbPos += NAMECONNECTORLEN;
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                     }
 
@@ -1894,7 +1888,7 @@ namespace ScoredProductions.NanoJson {
             }
 
             int objectCount = RecursiveCount(this);
-            int estimatedCapacity = this.GetLength + objectCount * 5 + (pretty ? (objectCount * INDENT_LEN * 2) : 0) + 64; //  Reference Len + number of items if all where considered KeyValues + potential needed indents + extra buffer for additional characters
+            int estimatedCapacity = this.GetLength * INDENT_LEN; //  Reference Len + number of items if all where considered KeyValues + potential needed indents
 
             char[] buffer = ArrayPool<char>.Shared.Rent(estimatedCapacity); // 0 returns empty array?
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
@@ -1907,9 +1901,6 @@ namespace ScoredProductions.NanoJson {
         /// Recursive method to build the json ToString output
         /// </summary>
         private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, in bool reparseNumbers, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
-            const string NameConnector = "\": ";
-            const int NameConnectorLen = 3;
-
             switch (this.Type) {
                 case JsonType.String: {
                     EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
@@ -2005,8 +1996,8 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
-                            sbPos += NameConnectorLen;
+                            NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                            sbPos += NAMECONNECTORLEN;
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 2, ref sb);
                             sb[sbPos++] = ',';
@@ -2021,8 +2012,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
-                        sbPos += NameConnectorLen;
+                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                        sbPos += NAMECONNECTORLEN;
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                         EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                         sb[sbPos++] = '\n';
@@ -2040,8 +2031,8 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
-                            sbPos += NameConnectorLen;
+                            NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                            sbPos += NAMECONNECTORLEN;
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 1, ref sb);
                             sb[sbPos++] = ',';
@@ -2051,8 +2042,8 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        NameConnector.AsSpan().CopyTo(sb.AsSpan(sbPos, NameConnectorLen));
-                        sbPos += NameConnectorLen;
+                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
+                        sbPos += NAMECONNECTORLEN;
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                     }
 
@@ -2368,13 +2359,28 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the inner values of this Object/Array as a string array
         /// </summary>
-        public readonly string[] ToStringArray
+        public readonly string[] ToStringArrayDecoded
         {
             get
             {
                 string[] array = new string[this.InnerLength];
                 for (int x = 0; x < this.InnerLength; x++) {
                     array[x] = this[x].GetStringDecoded;
+                }
+                return array;
+            }
+        }
+
+        /// <summary>
+        /// Get the inner values of this Object/Array as a string array
+        /// </summary>
+        public readonly string[] ToStringArray
+        {
+            get
+            {
+                string[] array = new string[this.InnerLength];
+                for (int x = 0; x < this.InnerLength; x++) {
+                    array[x] = this[x].GetStringLiteral;
                 }
                 return array;
             }
@@ -2906,7 +2912,7 @@ namespace ScoredProductions.NanoJson {
 
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
-
+        
         public int CurrentIndex { get; private set; }
 
         public readonly ushort CurrentValue => this.source[this.CurrentIndex];
@@ -3009,6 +3015,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3018,7 +3025,7 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus;
                     continue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] > 0) {
                         this.CurrentIndex += i;
                         return this.CurrentIndex;
@@ -3040,6 +3047,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3048,7 +3056,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] == 0) {
                         this.CurrentIndex += i;
                         return this.CurrentIndex;
@@ -3074,6 +3082,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3086,7 +3095,7 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] > 0) {
                         this.CurrentIndex += i;
                         return this.CurrentValue;
@@ -3112,6 +3121,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3123,7 +3133,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] == 0) {
                         this.CurrentIndex += i;
                         return this.CurrentValue;
@@ -3145,6 +3155,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3153,7 +3164,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
                         this.CurrentIndex += i;
                         return this.CurrentValue;
@@ -3175,6 +3186,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3183,7 +3195,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
                         this.CurrentIndex += i;
                         return this.CurrentValue;
@@ -3208,6 +3220,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3224,7 +3237,7 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i < segment; i++) {
+                for (int i = 0; i <= segmentMinus; i++) {
                     if (eq[i] > 0) {
                         ushort current = buf[i];
                         if (current == COMMA || IsWhiteSpace(current) || current == RBRACE || current == RBRACKET) {
@@ -3262,6 +3275,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear(); // Remove trailing chars
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3272,7 +3286,7 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    for (int i = 0; i < segment; i++) {
+                    for (int i = 0; i <= segmentMinus; i++) {
                         if (eq[i] > 0) {
                             WithinQuotes = false;
                             this.CurrentIndex += i; // One Place after Quote
@@ -3289,7 +3303,7 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    for (int i = 0; i < segment; i++) {
+                    for (int i = 0; i <= segmentMinus; i++) {
                         if (eq[i] > 0) {
                             ushort ch = buf[i];
                             switch (ch) {
@@ -3348,6 +3362,7 @@ namespace ScoredProductions.NanoJson {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear(); // Remove trailing chars
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
@@ -3358,7 +3373,7 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    for (int i = 0; i < segment; i++) {
+                    for (int i = 0; i <= segmentMinus; i++) {
                         if (eq[i] > 0) {
                             WithinQuotes = false;
                             this.CurrentIndex += i; // One Place after Quote
@@ -3375,7 +3390,7 @@ namespace ScoredProductions.NanoJson {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                         continue;
                     }
-                    for (int i = 0; i < segment; i++) {
+                    for (int i = 0; i <= segmentMinus; i++) {
                         if (eq[i] > 0) {
                             ushort ch = buf[i];
                             switch (ch) {
@@ -3435,12 +3450,13 @@ namespace ScoredProductions.NanoJson {
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3467,12 +3483,13 @@ namespace ScoredProductions.NanoJson {
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3502,12 +3519,13 @@ namespace ScoredProductions.NanoJson {
             }
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.Equals(toCompare, searchVector[0]);
                 for (int i = 1; i < searchLen; i++) {
@@ -3541,12 +3559,13 @@ namespace ScoredProductions.NanoJson {
             }
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.Equals(toCompare, searchVector[0]);
                 for (int i = 1; i < searchLen; i++) {
@@ -3575,12 +3594,13 @@ namespace ScoredProductions.NanoJson {
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3606,12 +3626,13 @@ namespace ScoredProductions.NanoJson {
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
-                if (start > -1) {
+                if (start >= 0) {
                     this.source.Slice(start, segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
+                    segmentMinus = this.CurrentIndex;
                 }
                 Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3673,6 +3694,9 @@ namespace ScoredProductions.NanoJson {
         internal const ushort S_UPPER = 'S';
 
         public const ulong JSONWHITESPACEMASK = (1UL << 9) | (1UL << 10) | (1UL << 13) | (1UL << 32);
+
+        internal const string NAMECONNECTOR = "\": ";
+        internal const int NAMECONNECTORLEN = 3;
 
         /// <summary>
         /// Format used by the basic <c>.ToString()</c>
