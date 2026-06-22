@@ -796,7 +796,7 @@ namespace ScoredProductions.NanoJson {
                     }
             }
 
-            char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * INDENT_LEN);
+            char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * (INDENT_LEN * 4));
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
             string builtString = buffer.AsSpan().Slice(0, pos).ToString();
             ArrayPool<char>.Shared.Return(buffer);
@@ -1891,8 +1891,7 @@ namespace ScoredProductions.NanoJson {
                     }
             }
 
-            int objectCount = RecursiveCount(this);
-            int estimatedCapacity = this.GetLength * INDENT_LEN; //  Reference Len + number of items if all where considered KeyValues + potential needed indents
+            int estimatedCapacity = this.GetLength * (INDENT_LEN * RecursiveCount(this)); //  Reference Len * number of items * indent
 
             char[] buffer = ArrayPool<char>.Shared.Rent(estimatedCapacity); // 0 returns empty array?
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
@@ -2920,7 +2919,7 @@ namespace ScoredProductions.NanoJson {
 
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
-        
+
         public int CurrentIndex { get; private set; }
 
         public readonly ushort CurrentValue => this.source[this.CurrentIndex];
