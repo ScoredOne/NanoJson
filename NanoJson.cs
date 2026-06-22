@@ -894,8 +894,9 @@ namespace ScoredProductions.NanoJson {
                                 sb[sbPos++] = '"';
                                 prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
                                 sbPos += prior.GetKeyLen;
-                                NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                                sbPos += NAMECONNECTORLEN;
+                                sb[sbPos++] = '"';
+                                sb[sbPos++] = ':';
+                                sb[sbPos++] = ' ';
                                 prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 EnsureBufferCapacity(sbPos + 2, ref sb);
                                 sb[sbPos++] = ',';
@@ -911,8 +912,9 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
                         sbPos += current.GetKeyLen;
-                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                        sbPos += NAMECONNECTORLEN;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                         EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
                         sb[sbPos++] = '\n';
@@ -931,8 +933,9 @@ namespace ScoredProductions.NanoJson {
                                 sb[sbPos++] = '"';
                                 prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
                                 sbPos += prior.GetKeyLen;
-                                NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                                sbPos += NAMECONNECTORLEN;
+                                sb[sbPos++] = '"';
+                                sb[sbPos++] = ':';
+                                sb[sbPos++] = ' ';
                                 prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 EnsureBufferCapacity(sbPos + 1, ref sb);
                                 sb[sbPos++] = ',';
@@ -943,8 +946,9 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
                         sbPos += current.GetKeyLen;
-                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                        sbPos += NAMECONNECTORLEN;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                     }
 
@@ -1996,8 +2000,9 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                            sbPos += NAMECONNECTORLEN;
+                            sb[sbPos++] = '"';
+                            sb[sbPos++] = ':';
+                            sb[sbPos++] = ' ';
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 2, ref sb);
                             sb[sbPos++] = ',';
@@ -2012,8 +2017,9 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                        sbPos += NAMECONNECTORLEN;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                         EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                         sb[sbPos++] = '\n';
@@ -2031,8 +2037,9 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
-                            NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                            sbPos += NAMECONNECTORLEN;
+                            sb[sbPos++] = '"';
+                            sb[sbPos++] = ':';
+                            sb[sbPos++] = ' ';
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 1, ref sb);
                             sb[sbPos++] = ',';
@@ -2042,8 +2049,9 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '"';
                         valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
                         sbPos += valueLast.KeyLen;
-                        NAMECONNECTOR.AsSpan().CopyTo(sb.AsSpan(sbPos, NAMECONNECTORLEN));
-                        sbPos += NAMECONNECTORLEN;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
                         valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                     }
 
@@ -3694,9 +3702,6 @@ namespace ScoredProductions.NanoJson {
         internal const ushort S_UPPER = 'S';
 
         public const ulong JSONWHITESPACEMASK = (1UL << 9) | (1UL << 10) | (1UL << 13) | (1UL << 32);
-
-        internal const string NAMECONNECTOR = "\": ";
-        internal const int NAMECONNECTORLEN = 3;
 
         /// <summary>
         /// Format used by the basic <c>.ToString()</c>
