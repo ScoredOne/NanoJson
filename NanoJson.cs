@@ -3131,37 +3131,6 @@ namespace ScoredProductions.NanoJson {
         public ushort AdvanceToWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
-            Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
-            while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
-                    buf.Clear();
-                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
-                    segmentMinus = this.endIndex - this.CurrentIndex;
-                }
-                else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
-                }
-                Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
-                if (eq == Vector<ushort>.Zero) {
-                    return this.CurrentValue;
-                }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
-                        this.CurrentIndex += i;
-                        return this.CurrentValue;
-                    }
-                }
-                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
-            return '\0';
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ushort AdvanceToNotWhiteSpace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
             Span<ushort> buf = stackalloc ushort[segment];
             ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
@@ -3176,10 +3145,43 @@ namespace ScoredProductions.NanoJson {
                 }
                 Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
-                    return this.CurrentValue;
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
                 }
                 for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
+                    if (eq[i] > 0 && IsWhiteSpace(buf[i])) {
+                        this.CurrentIndex += i;
+                        return this.CurrentValue;
+                    }
+                }
+                this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+            }
+            return '\0';
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ushort AdvanceToNotWhiteSpace() {
+            int segment = Vector<ushort>.Count;
+            int segmentMinus = segment - 1;
+            Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
+            Span<ushort> buf = stackalloc ushort[segment];
+            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            while (this.Increment()) {
+                if (this.CurrentIndex + segment > this.endIndex) {
+                    buf.Clear();
+                    this.source.Slice(this.CurrentIndex).CopyTo(buf);
+                    segmentMinus = this.endIndex - this.CurrentIndex;
+                }
+                else {
+                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                }
+                Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
+                if (eq == Vector<ushort>.Zero) {
+                    this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
+                    continue;
+                }
+                for (int i = 0; i <= segmentMinus; i++) {
+                    if (eq[i] > 0 && !IsWhiteSpace(buf[i])) {
                         this.CurrentIndex += i;
                         return this.CurrentValue;
                     }
