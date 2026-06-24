@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.6                                      ///
+///     Version: 1.3.7                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -45,18 +45,17 @@ namespace ScoredProductions.NanoJson {
             internal Enumerator(in JsonSpan owner) {
                 this.ownerValue = owner.Value;
                 this.ownerType = owner.Type;
-                JsonReader r = new JsonReader(owner.Value);
+                this.reader = new JsonReader(owner.Value);
                 this.index = -1;
                 this.current = Empty;
                 switch (this.ownerType) {
                     case JsonType.Object:
-                        r.AdvanceTo(LBRACE);
+                        this.reader.AdvanceTo(LBRACE);
                         break;
                     case JsonType.Array:
-                        r.AdvanceTo(LBRACKET);
+                        this.reader.AdvanceTo(LBRACKET);
                         break;
                 }
-                this.reader = r;
             }
 
             public readonly JsonSpan Current => this.current;
@@ -132,54 +131,55 @@ namespace ScoredProductions.NanoJson {
                 if (key.IsEmpty) {
                     throw new ArgumentOutOfRangeException(nameof(key));
                 }
-                if (this.ownerType != JsonType.Object) {
+                if (!HasFlag((long)JsonType.Object, (long)this.ownerType)) {
                     value = Empty;
                     return false;
                 }
-                if (this.index >= 0 && key.StartsWith(this.current.Key, StringComparison.Ordinal)) {
-                    value = this.current;
-                    return true;
-                }
+
+                int keyhash = ComputeHash(in key, out int pathLen);
+                int valueKey;
+                int valueLen;
                 int endLen = this.index;
-                bool found = false;
-                if (this.index > 0) {
-                    while (this.MoveNext()) {
-                        if (key.StartsWith(this.current.Key, StringComparison.Ordinal)) {
-                            found = true;
-                            goto Found;
+                if (endLen < 0) {
+                    if (!this.MoveNext()) {
+                        value = Empty;
+                        return false;
+                    }
+                }
+                do {
+                    valueKey = ComputeHash(this.current.Key, out valueLen);
+                    if (keyhash == valueKey) {
+                        value = this.current;
+                        return true;
+                    }
+                    else {
+                        if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
+                            if (this.current.TryGetKey(key[++valueLen..], out value)) {
+                                return true;
+                            }
                         }
                     }
+                } while (this.MoveNext());
+                if (endLen > 0) {
                     this.Reset();
                     for (int x = 0; x < endLen; x++) {
                         this.MoveNext();
-                        if (key.StartsWith(this.current.Key, StringComparison.Ordinal)) {
-                            found = true;
-                            goto Found;
+                        valueKey = ComputeHash(this.current.Key, out valueLen);
+                        if (keyhash == valueKey) {
+                            value = this.current;
+                            return true;
+                        }
+                        else {
+                            if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
+                                if (this.current.TryGetKey(key[++valueLen..], out value)) {
+                                    return true;
+                                }
+                            }
                         }
                     }
                 }
-                else {
-                    while (this.MoveNext()) {
-                        if (key.StartsWith(this.current.Key, StringComparison.Ordinal)) {
-                            found = true;
-                            goto Found;
-                        }
-                    }
-                }
-                Found:
-                if (found) {
-                    if (key.Length == this.current.GetKeyLen) {
-                        value = this.current;
-                    }
-                    else {
-                        this.current.TryGetKey(key.Slice(this.current.GetKeyLen + 1), out value);
-                    }
-                    return true;
-                }
-                else {
-                    value = Empty;
-                    return false;
-                }
+                value = Empty;
+                return false;
             }
 
             public bool MoveNext() {
@@ -660,7 +660,7 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                if (this.Type == JsonType.Object && this.TryGetKey(in key, out JsonSpan v)) {
+                if (HasFlag((long)JsonType.Object, (long)this.Type) && this.TryGetKey(in key, out JsonSpan v)) {
                     return v;
                 }
                 return Empty;
@@ -673,14 +673,11 @@ namespace ScoredProductions.NanoJson {
                 return false;
             }
 
+            int keyhash = ComputeHash(in key, out int pathLen);
             JsonReader providedReader = new JsonReader(this.Value);
             providedReader.AdvanceTo(LBRACE);
             ReadOnlySpan<char> name;
-            do {
-                if (!providedReader.CanAdvance) {
-                    value = Empty;
-                    return false;
-                }
+            while (providedReader.CanAdvance) {
                 providedReader.AdvanceToNotWhiteSpace();
                 if (providedReader.CurrentValue != QUOTE) {
                     providedReader.AdvanceTo(QUOTE);
@@ -706,11 +703,21 @@ namespace ScoredProductions.NanoJson {
                         break;
                     }
                 }
-            } while (!key.StartsWith(name));
-            if (key.Length != value.GetKeyLen) {
-                return value.TryGetKey(key.Slice(value.GetKeyLen + 1), out value);
+
+                int valueKey = ComputeHash(value.Key, out int valueLen);
+                if (keyhash == valueKey) {
+                    return true;
+                }
+                else {
+                    if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
+                        if (value.TryGetKey(key[++valueLen..], out value)) {
+                            return true;
+                        }
+                    }
+                }
             }
-            return true;
+            value = Empty;
+            return false;
         }
 
         public readonly Enumerator GetEnumerator() => new Enumerator(in this);
@@ -744,7 +751,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
-            if (this.TryGetKey(key, out JsonSpan value) && value.Type == JsonType.String) {
+            if (this.TryGetKey(key, out JsonSpan value) && HasFlag((long)JsonType.String, (long)value.Type)) {
                 @out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
                 return true;
             }
@@ -878,46 +885,36 @@ namespace ScoredProductions.NanoJson {
                         return;
                     }
 
-                    JsonSpan prior = Empty;
-                    JsonSpan current = Empty;
+                    Enumerator enumerator = this.GetEnumerator();
                     if (pretty) {
                         indent++;
                         sb[sbPos++] = '\n';
-                        foreach (JsonSpan next in this) {
-                            current = next;
-                            if (!prior.IsNothing) {
-                                EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + prior.GetKeyLen + 4, ref sb);
-                                for (y = indent; --y >= 0;) {
-                                    indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                    sbPos += INDENT_LEN;
-                                }
-                                sb[sbPos++] = '"';
-                                prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
-                                sbPos += prior.GetKeyLen;
-                                sb[sbPos++] = '"';
-                                sb[sbPos++] = ':';
-                                sb[sbPos++] = ' ';
-                                prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 2, ref sb);
+
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            JsonSpan current = enumerator.Current;
+                            EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + current.GetKeyLen + 4, ref sb);
+                            for (y = indent; --y >= 0;) {
+                                indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
+                                sbPos += INDENT_LEN;
+                            }
+                            sb[sbPos++] = '"';
+                            current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
+                            sbPos += current.GetKeyLen;
+                            sb[sbPos++] = '"';
+                            sb[sbPos++] = ':';
+                            sb[sbPos++] = ' ';
+                            current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            EnsureBufferCapacity(sbPos + 2, ref sb);
+                            moved = enumerator.MoveNext();
+                            if (moved) {
                                 sb[sbPos++] = ',';
                                 sb[sbPos++] = '\n';
                             }
-                            prior = current;
-                        }
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + current.GetKeyLen + 4, ref sb);
-                        for (y = indent; --y >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
-                        }
-                        sb[sbPos++] = '"';
-                        current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
-                        sbPos += current.GetKeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
-                        current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
-                        sb[sbPos++] = '\n';
+                            else {
+                                sb[sbPos++] = '\n';
+                            }
+                        } while (moved);
 
                         indent--;
                         for (x = indent; --x >= 0;) {
@@ -926,30 +923,23 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
                     else {
-                        foreach (JsonSpan next in this) {
-                            current = next;
-                            if (!prior.IsNothing) {
-                                EnsureBufferCapacity(sbPos + prior.GetKeyLen + 4, ref sb);
-                                sb[sbPos++] = '"';
-                                prior.Key.CopyTo(sb.AsSpan(sbPos, prior.GetKeyLen));
-                                sbPos += prior.GetKeyLen;
-                                sb[sbPos++] = '"';
-                                sb[sbPos++] = ':';
-                                sb[sbPos++] = ' ';
-                                prior.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 1, ref sb);
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            JsonSpan current = enumerator.Current;
+                            EnsureBufferCapacity(sbPos + current.GetKeyLen + 4, ref sb);
+                            sb[sbPos++] = '"';
+                            current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
+                            sbPos += current.GetKeyLen;
+                            sb[sbPos++] = '"';
+                            sb[sbPos++] = ':';
+                            sb[sbPos++] = ' ';
+                            current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            EnsureBufferCapacity(sbPos + 1, ref sb);
+                            moved = enumerator.MoveNext();
+                            if (moved) {
                                 sb[sbPos++] = ',';
                             }
-                            prior = current;
-                        }
-                        EnsureBufferCapacity(sbPos + current.GetKeyLen + 4, ref sb);
-                        sb[sbPos++] = '"';
-                        current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
-                        sbPos += current.GetKeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
-                        current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                        } while (moved);
                     }
 
                     EnsureBufferCapacity(sbPos + 1, ref sb);
@@ -976,38 +966,32 @@ namespace ScoredProductions.NanoJson {
                         return;
                     }
 
-                    JsonSpan prior = Empty;
-                    JsonSpan current = Empty;
+                    Enumerator enumerator = this.GetEnumerator();
                     if (pretty) {
                         indent++;
                         sb[sbPos++] = '\n';
-                        foreach (JsonSpan next in this) {
-                            current = next;
-                            if (!prior.IsNothing) {
-                                if (HasFlag((long)JsonType.Value, (long)prior.Type)) {
-                                    EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                                    for (y = indent; --y >= 0;) {
-                                        indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                        sbPos += INDENT_LEN;
-                                    }
+
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            JsonSpan current = enumerator.Current;
+                            if (HasFlag((long)JsonType.Value, (long)current.Type)) {
+                                EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
+                                for (y = indent; --y >= 0;) {
+                                    indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
+                                    sbPos += INDENT_LEN;
                                 }
-                                prior.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 2, ref sb);
+                            }
+                            current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            EnsureBufferCapacity(sbPos + 2, ref sb);
+                            moved = enumerator.MoveNext();
+                            if (moved) {
                                 sb[sbPos++] = ',';
                                 sb[sbPos++] = '\n';
                             }
-                            prior = current;
-                        }
-                        if (HasFlag((long)JsonType.Value, (long)current.Type)) {
-                            EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                            for (y = indent; --y >= 0;) {
-                                indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                sbPos += INDENT_LEN;
+                            else {
+                                sb[sbPos++] = '\n';
                             }
-                        }
-                        current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
-                        sb[sbPos++] = '\n';
+                        } while (moved);
 
                         indent--;
                         for (x = indent; --x >= 0;) {
@@ -1016,16 +1000,15 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
                     else {
-                        foreach (JsonSpan next in this) {
-                            current = next;
-                            if (!prior.IsNothing) {
-                                prior.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 1, ref sb);
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            enumerator.Current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            EnsureBufferCapacity(sbPos + 1, ref sb);
+                            moved = enumerator.MoveNext();
+                            if (moved) {
                                 sb[sbPos++] = ',';
                             }
-                            prior = current;
-                        }
-                        current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                        } while (moved);
                     }
 
                     EnsureBufferCapacity(sbPos + 1, ref sb);
@@ -1087,7 +1070,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
-            if (this.TryGetKey(in key, out JsonSpan value) && value.Type == JsonType.Number) {
+            if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.Object, (long)value.Type)) {
                 return double.TryParse(value.Value, out @out);
             }
             else {
@@ -1128,7 +1111,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            if (this.TryGetKey(in key, out JsonSpan value) && value.Type == JsonType.Number) {
+            if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.Number, (long)value.Type)) {
                 @out = value.GetNumberOfType<T>();
                 return true;
             }
@@ -1162,7 +1145,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonSpan value) ? (@out = value.Type == JsonType.Boolean && value.GetBool) : (@out = false);
+        public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonSpan value) ? (@out = HasFlag((long)JsonType.Boolean, (long)value.Type) && value.GetBool) : (@out = false);
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
@@ -1985,12 +1968,15 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = '}';
                         return;
                     }
-                    int limit = this.InnerLength - 1;
+
+                    ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
                     if (pretty) {
                         indent++;
                         sb[sbPos++] = '\n';
-                        for (x = 0; x < limit; x++) {
-                            ref readonly JsonMemory value = ref this.GetInsideValues[x];
+
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            ref readonly JsonMemory value = ref enumerator.Current;
                             EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + value.KeyLen + 4, ref sb);
                             for (y = indent; --y >= 0;) {
                                 indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
@@ -2004,24 +1990,15 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = ' ';
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             EnsureBufferCapacity(sbPos + 2, ref sb);
-                            sb[sbPos++] = ',';
-                            sb[sbPos++] = '\n';
-                        }
-                        ref readonly JsonMemory valueLast = ref this.GetInsideValues[x];
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + valueLast.KeyLen + 4, ref sb);
-                        for (y = indent; --y >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
-                        }
-                        sb[sbPos++] = '"';
-                        valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
-                        sbPos += valueLast.KeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
-                        valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                        sb[sbPos++] = '\n';
+                            moved = enumerator.MoveNext();
+                            if (moved) {
+                                sb[sbPos++] = ',';
+                                sb[sbPos++] = '\n';
+                            }
+                            else {
+                                sb[sbPos++] = '\n';
+                            }
+                        } while (moved);
 
                         indent--;
                         for (x = indent; --x >= 0;) {
@@ -2030,8 +2007,10 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
                     else {
-                        for (x = 0; x < limit; x++) {
-                            ref readonly JsonMemory value = ref this.GetInsideValues[x];
+
+                        bool moved = enumerator.MoveNext();
+                        do {
+                            ref readonly JsonMemory value = ref enumerator.Current;
                             EnsureBufferCapacity(sbPos + value.KeyLen + 4, ref sb);
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
@@ -2040,18 +2019,12 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = ':';
                             sb[sbPos++] = ' ';
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 1, ref sb);
-                            sb[sbPos++] = ',';
-                        }
-                        ref readonly JsonMemory valueLast = ref this.GetInsideValues[x];
-                        EnsureBufferCapacity(sbPos + valueLast.KeyLen + 4, ref sb);
-                        sb[sbPos++] = '"';
-                        valueLast.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, valueLast.KeyLen));
-                        sbPos += valueLast.KeyLen;
-                        sb[sbPos++] = '"';
-                        sb[sbPos++] = ':';
-                        sb[sbPos++] = ' ';
-                        valueLast.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            moved = enumerator.MoveNext();
+                            if (moved) {
+                                EnsureBufferCapacity(sbPos + 1, ref sb);
+                                sb[sbPos++] = ',';
+                            }
+                        } while (moved);
                     }
 
                     EnsureBufferCapacity(sbPos + 1, ref sb);
@@ -2078,12 +2051,14 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = ']';
                     }
                     else {
-                        int limit = this.InnerLength - 1;
+                        ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
                         if (pretty) {
                             indent++;
                             sb[sbPos++] = '\n';
-                            for (x = 0; x < limit; x++) {
-                                ref readonly JsonMemory value = ref this.GetInsideValues[x];
+
+                            bool moved = enumerator.MoveNext();
+                            do {
+                                ref readonly JsonMemory value = ref enumerator.Current;
                                 if (HasFlag((long)JsonType.Value, (long)value.Type)) {
                                     EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                                     for (y = indent; --y >= 0;) {
@@ -2093,20 +2068,15 @@ namespace ScoredProductions.NanoJson {
                                 }
                                 value.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 EnsureBufferCapacity(sbPos + 2, ref sb);
-                                sb[sbPos++] = ',';
-                                sb[sbPos++] = '\n';
-                            }
-                            ref readonly JsonMemory valueLast = ref this.GetInsideValues[x];
-                            if (HasFlag((long)JsonType.Value, (long)valueLast.Type)) {
-                                EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                                for (y = indent; --y >= 0;) {
-                                    indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                    sbPos += INDENT_LEN;
+                                moved = enumerator.MoveNext();
+                                if (moved) {
+                                    sb[sbPos++] = ',';
+                                    sb[sbPos++] = '\n';
                                 }
-                            }
-                            valueLast.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + 1, ref sb);
-                            sb[sbPos++] = '\n';
+                                else {
+                                    sb[sbPos++] = '\n';
+                                }
+                            } while (moved);
 
                             indent--;
                             for (x = indent; --x >= 0;) {
@@ -2115,12 +2085,16 @@ namespace ScoredProductions.NanoJson {
                             }
                         }
                         else {
-                            for (x = 0; x < limit; x++) {
-                                this.GetInsideValues[x].ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 1, ref sb);
-                                sb[sbPos++] = ',';
-                            }
-                            this.GetInsideValues[x].ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                            bool moved = enumerator.MoveNext();
+                            do {
+                                ref readonly JsonMemory value = ref enumerator.Current;
+                                value.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
+                                moved = enumerator.MoveNext();
+                                if (moved) {
+                                    EnsureBufferCapacity(sbPos + 1, ref sb);
+                                    sb[sbPos++] = ',';
+                                }
+                            } while (moved);
                         }
 
                         EnsureBufferCapacity(sbPos + 1, ref sb);
@@ -2944,10 +2918,12 @@ namespace ScoredProductions.NanoJson {
         /// To output the current information about the reader for debug purposes
         /// </summary>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override readonly string ToString() {
             return $"Reader: {{Source ..{ToStringSegmentLength}:: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - ToStringSegmentLength)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentChar)}'}}";
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly ReadOnlySpan<ushort> Slice(int index, int len) {
             return this.source.Slice(index, len);
         }
