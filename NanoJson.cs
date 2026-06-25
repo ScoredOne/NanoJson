@@ -795,7 +795,7 @@ namespace ScoredProductions.NanoJson {
                         return this.GetStringLiteral;
                     }
                 case JsonType.Boolean:
-                    if (this.Value[0] == 'T') {
+                    if (MemoryMarshal.GetReference(this.Value) == 'T') {
                         return lowerCaseBool ? TRUE_l : TRUE_u;
                     }
                     else {
@@ -852,7 +852,7 @@ namespace ScoredProductions.NanoJson {
                     EnsureBufferCapacity(sbPos + 5, ref sb);
                     this.Value.CopyTo(sb.AsSpan(sbPos, this.GetLength));
                     if (lowerCaseBool) {
-                        switch (this.Value[0]) {
+                        switch (MemoryMarshal.GetReference(this.Value)) {
                             case 'F':
                                 sb[sbPos] = 'f';
                                 break;
@@ -1866,7 +1866,7 @@ namespace ScoredProductions.NanoJson {
                         return this.GetStringLiteral;
                     }
                 case JsonType.Boolean:
-                    if (this.ReferenceData.Span[0] == 'T') {
+                    if (MemoryMarshal.GetReference(this.ReferenceData.Span) == 'T') {
                         return lowerCaseBool ? TRUE_l : TRUE_u;
                     }
                     else {
@@ -1928,7 +1928,7 @@ namespace ScoredProductions.NanoJson {
                     EnsureBufferCapacity(sbPos + 5, ref sb);
                     if (lowerCaseBool) {
                         // write lowercase first char
-                        char first = refSpan[0];
+                        ref char first = ref MemoryMarshal.GetReference(refSpan);
                         if (first == 'T') {
                             sb[sbPos++] = 't';
                         }
@@ -2891,20 +2891,25 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
+        private Vector<ushort> toCompare;
+
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
 
         public int CurrentIndex { get; private set; }
 
-        public readonly ushort CurrentValue => this.source[this.CurrentIndex];
+        public readonly ref readonly ushort CurrentValue => ref this.source[this.CurrentIndex];
         public readonly char CurrentChar => (char)this.CurrentValue;
 
         public readonly bool CanAdvance => this.CurrentIndex < this.endIndex;
         public readonly bool CanRetreat => this.CurrentIndex > 0;
 
+        public Span<ushort> toCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
+
         public JsonReader(in ReadOnlySpan<char> data, bool fromEnd = false) {
             this.source = MemoryMarshal.Cast<char, ushort>(data);
             this.endIndex = data.Length - 1;
+            this.toCompare = new Vector<ushort>();
 
             if (fromEnd) {
                 this.CurrentIndex = data.Length;
@@ -2992,8 +2997,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3003,7 +3007,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus;
                     continue;
@@ -3024,8 +3028,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVectors = new Vector<ushort>(search);
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3035,7 +3038,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, searchVectors);
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
@@ -3055,12 +3058,11 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             int searchLen = search.Length;
+            Span<ushort> buf = this.toCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3070,9 +3072,9 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3094,12 +3096,11 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             int searchLen = search.Length;
+            Span<ushort> buf = this.toCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3109,9 +3110,9 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
@@ -3132,8 +3133,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3143,7 +3143,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
+                Vector<ushort> eq = Vector.LessThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
@@ -3164,8 +3164,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3175,7 +3174,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
+                Vector<ushort> eq = Vector.GreaterThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
@@ -3199,8 +3198,7 @@ namespace ScoredProductions.NanoJson {
             Vector<ushort> rbraceVector = new Vector<ushort>(RBRACE);
             Vector<ushort> rbracketVector = new Vector<ushort>(RBRACKET);
             Vector<ushort> whitespace = new Vector<ushort>(33);
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
                     buf.Clear();
@@ -3211,13 +3209,13 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.BitwiseOr(
-                    Vector.LessThan(toCompare, whitespace),
+                    Vector.LessThan(this.toCompare, whitespace),
                     Vector.BitwiseOr(
                         Vector.BitwiseOr(
-                            Vector.Equals(toCompare, commaVector),
-                            Vector.Equals(toCompare, rbracketVector)
+                            Vector.Equals(this.toCompare, commaVector),
+                            Vector.Equals(this.toCompare, rbracketVector)
                             ),
-                        Vector.Equals(toCompare, rbraceVector)));
+                        Vector.Equals(this.toCompare, rbraceVector)));
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
@@ -3251,10 +3249,9 @@ namespace ScoredProductions.NanoJson {
                 new Vector<ushort>(RBRACKET),
             };
             int searchLen = searchVectors.Length;
-            Span<ushort> buf = stackalloc ushort[segment];
             bool WithinQuotes = false;
             int debth = 1; // Already within the first brace
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             Continue:
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
@@ -3265,7 +3262,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 if (WithinQuotes) {
                     if (eq == Vector<ushort>.Zero) {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3282,7 +3279,7 @@ namespace ScoredProductions.NanoJson {
                 }
                 else {
                     for (int i = 1; i < searchLen; i++) {
-                        eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                        eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
                     }
                     if (eq == Vector<ushort>.Zero) {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3338,10 +3335,9 @@ namespace ScoredProductions.NanoJson {
                 new Vector<ushort>(RBRACKET),
             };
             int searchLen = searchVectors.Length;
-            Span<ushort> buf = stackalloc ushort[segment];
             bool WithinQuotes = false;
             int debth = 1; // Already within the first brace
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             Continue:
             while (this.Increment()) {
                 if (this.CurrentIndex + segment > this.endIndex) {
@@ -3352,7 +3348,7 @@ namespace ScoredProductions.NanoJson {
                 else {
                     this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVectors[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 if (WithinQuotes) {
                     if (eq == Vector<ushort>.Zero) {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3369,7 +3365,7 @@ namespace ScoredProductions.NanoJson {
                 }
                 else {
                     for (int i = 1; i < searchLen; i++) {
-                        eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVectors[i]));
+                        eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
                     }
                     if (eq == Vector<ushort>.Zero) {
                         this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
@@ -3431,8 +3427,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
@@ -3443,7 +3438,7 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex -= segmentMinus;
                     continue;
@@ -3464,8 +3459,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
@@ -3476,7 +3470,7 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVector);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
@@ -3496,9 +3490,8 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             int searchLen = search.Length;
+            Span<ushort> buf = this.toCompareSpan;
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
             }
@@ -3512,9 +3505,9 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVector[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVector));
                 for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVector[i]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex -= segmentMinus;
@@ -3536,9 +3529,8 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             int searchLen = search.Length;
+            Span<ushort> buf = this.toCompareSpan;
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
             }
@@ -3552,9 +3544,9 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.Equals(toCompare, searchVector[0]);
+                Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVector));
                 for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(toCompare, searchVector[i]));
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVector[i]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
@@ -3575,8 +3567,7 @@ namespace ScoredProductions.NanoJson {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' ' 
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
@@ -3587,7 +3578,7 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.GreaterThan(toCompare, searchVector);
+                Vector<ushort> eq = Vector.GreaterThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
@@ -3606,9 +3597,8 @@ namespace ScoredProductions.NanoJson {
         public ushort RetreatToNotWhiteSpace() {
             int segment = Vector<ushort>.Count;
             int segmentMinus = segment - 1;
-            Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' ' 
-            Span<ushort> buf = stackalloc ushort[segment];
-            ref Vector<ushort> toCompare = ref MemoryMarshal.Cast<ushort, Vector<ushort>>(buf)[0];
+            Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
+            Span<ushort> buf = this.toCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
@@ -3619,7 +3609,7 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
                 }
-                Vector<ushort> eq = Vector.LessThan(toCompare, searchVector);
+                Vector<ushort> eq = Vector.LessThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
@@ -3976,7 +3966,8 @@ namespace ScoredProductions.NanoJson {
             int index = -1;
             bool dec = false;
             bool EFound = false;
-            if (data[0] == '-' || data[0] == '+') {
+            ref char firstChar = ref MemoryMarshal.GetReference(data);
+            if (firstChar == '-' || firstChar == '+') {
                 index++;
             }
 
