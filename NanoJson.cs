@@ -2891,10 +2891,11 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        private Vector<ushort> toCompare;
-
         private readonly ReadOnlySpan<ushort> source;
         private readonly int endIndex;
+
+        private Vector<ushort> toCompare;
+        private Span<ushort> toCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
 
         public int CurrentIndex { get; private set; }
 
@@ -2904,7 +2905,6 @@ namespace ScoredProductions.NanoJson {
         public readonly bool CanAdvance => this.CurrentIndex < this.endIndex;
         public readonly bool CanRetreat => this.CurrentIndex > 0;
 
-        public Span<ushort> toCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
 
         public JsonReader(in ReadOnlySpan<char> data, bool fromEnd = false) {
             this.source = MemoryMarshal.Cast<char, ushort>(data);
