@@ -1253,7 +1253,6 @@ namespace ScoredProductions.NanoJson {
                     }
                     else {
                         bufferSource = false;
-                        JsonContainerPool.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
                     }
 
                     int bufPos = bufferIndex;
@@ -1282,8 +1281,8 @@ namespace ScoredProductions.NanoJson {
                             case LBRACE:
                             case LBRACKET: {
                                 int bTemp = bufPos;
-                                JsonMemory newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, ++bufPos);
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(++bufPos, ref existingBuffer);
+                                JsonMemory newValue = new JsonMemory(ReadOnlyMemory<char>.Empty, in reference, ref reader, ref existingBuffer, bufPos);
                                 existingBuffer[bTemp] = newValue;
                                 switch (reader.AdvanceToNotWhiteSpace()) {
                                     case RBRACKET:
@@ -1395,13 +1394,13 @@ namespace ScoredProductions.NanoJson {
                     }
                     int refStart = left;
 
-                    bool bufferSource = false;
+                    bool bufferSource;
                     if (existingBuffer == null) {
                         existingBuffer = JsonContainerPool.Rent(16);
                         bufferSource = true;
                     }
                     else {
-                        JsonContainerPool.EnsureBufferCapacity(bufferIndex + 1, ref existingBuffer);
+                        bufferSource = false;
                     }
 
                     int bufPos = bufferIndex;
@@ -1442,8 +1441,8 @@ namespace ScoredProductions.NanoJson {
                             case LBRACE:
                             case LBRACKET: {
                                 int bTemp = bufPos;
-                                JsonMemory newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, ++bufPos);
-                                JsonContainerPool.EnsureBufferCapacity(bufPos, ref existingBuffer);
+                                JsonContainerPool.EnsureBufferCapacity(++bufPos, ref existingBuffer);
+                                JsonMemory newValue = new JsonMemory(reference.Slice(nameL, nameR), in reference, ref reader, ref existingBuffer, bufPos);
                                 existingBuffer[bTemp] = newValue;
                                 switch (reader.AdvanceToNotWhiteSpace()) {
                                     case RBRACE:
@@ -1828,10 +1827,44 @@ namespace ScoredProductions.NanoJson {
 
         private static int RecursiveCount(in JsonMemory value) {
             int counter = value.InnerLength;
-            for (int x = 0; x < value.InnerLength; x++) {
+            for (int x = value.InnerLength - 1; x >= 0; x--) {
                 counter += RecursiveCount(value[x]);
             }
             return counter;
+        }
+
+        private static int GetMaxIterativeDepth(in JsonMemory value) {
+            if (value.InnerLength == 0) {
+                return 1;
+            }
+            int maxChildDepth = 1;
+            for (int x = value.InnerLength; --x >= 0;) {
+                int depth = GetMaxIterativeDepth(in value[x]) + 1;
+                if (depth > maxChildDepth) {
+                    maxChildDepth = depth;
+                }
+            }
+            return maxChildDepth;
+        }
+
+        private static (int totalCount, int maxDepth) GetCountAndDepth(in JsonMemory value) {
+            if (value.InnerLength == 0) {
+                return (0, 1);
+            }
+
+            int totalCount = value.InnerLength;
+            int maxChildDepth = 1;
+
+            for (int x = value.InnerLength - 1; x >= 0; x--) {
+                (int childCount, int childDepth) = GetCountAndDepth(in value[x]);
+                totalCount += childCount;
+                int depth = childDepth + 1;
+                if (depth > maxChildDepth) {
+                    maxChildDepth = depth;
+                }
+            }
+
+            return (totalCount, maxChildDepth);
         }
 
         public readonly string ToString(ToStringFormat format) {
@@ -1873,8 +1906,8 @@ namespace ScoredProductions.NanoJson {
                         return lowerCaseBool ? FALSE_l : FALSE_u;
                     }
             }
-
-            int estimatedCapacity = this.GetLength * (INDENT_LEN * RecursiveCount(this)); //  Reference Len * number of items * indent
+            (int totalCount, int maxDepth) = GetCountAndDepth(in this);
+            int estimatedCapacity = this.GetLength + ((INDENT_LEN + 8 * maxDepth) * totalCount); //  Reference Len * number of items * indent
 
             char[] buffer = ArrayPool<char>.Shared.Rent(estimatedCapacity); // 0 returns empty array?
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
@@ -1889,7 +1922,6 @@ namespace ScoredProductions.NanoJson {
         private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, in bool reparseNumbers, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
             switch (this.Type) {
                 case JsonType.String: {
-                    EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
                     sb[sbPos++] = '"';
                     if (translateUnicode) {
                         TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb.AsSpan(), ref sbPos);
@@ -1903,21 +1935,17 @@ namespace ScoredProductions.NanoJson {
                     return;
                 }
                 case JsonType.Null: {
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
                     this.GetValueAsSpan.CopyTo(sb.AsSpan(sbPos, 4));
                     sbPos += 4;
                     return;
                 }
                 case JsonType.Number: {
                     if (reparseNumbers) {
-                        EnsureBufferCapacity(sbPos + 32, ref sb);
                         this.GetNumber.TryFormat(sb.AsSpan(sbPos), out int refSpanLen);
                         sbPos += refSpanLen;
                     }
                     else {
-                        ReadOnlySpan<char> numberSpan = this.GetValueAsSpan;
-                        EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
-                        numberSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
+                        this.GetValueAsSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
                         sbPos += this.GetLength;
                     }
                     return;
@@ -1925,7 +1953,6 @@ namespace ScoredProductions.NanoJson {
                 case JsonType.Boolean: {
                     ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
                     int len = this.GetLength;
-                    EnsureBufferCapacity(sbPos + 5, ref sb);
                     if (lowerCaseBool) {
                         // write lowercase first char
                         ref char first = ref MemoryMarshal.GetReference(refSpan);
@@ -1951,14 +1978,12 @@ namespace ScoredProductions.NanoJson {
                     int x;
                     int y;
                     if (pretty && !AsValue) {
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                         for (x = indent; --x >= 0;) {
                             indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
                             sbPos += INDENT_LEN;
                         }
                     }
 
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
                     sb[sbPos++] = '{';
 
                     if (this.InnerLength == 0) {
@@ -1977,7 +2002,6 @@ namespace ScoredProductions.NanoJson {
                         bool moved = enumerator.MoveNext();
                         do {
                             ref readonly JsonMemory value = ref enumerator.Current;
-                            EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + value.KeyLen + 4, ref sb);
                             for (y = indent; --y >= 0;) {
                                 indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
                                 sbPos += INDENT_LEN;
@@ -1989,15 +2013,11 @@ namespace ScoredProductions.NanoJson {
                             sb[sbPos++] = ':';
                             sb[sbPos++] = ' ';
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 2, ref sb);
                             moved = enumerator.MoveNext();
                             if (moved) {
                                 sb[sbPos++] = ',';
-                                sb[sbPos++] = '\n';
                             }
-                            else {
-                                sb[sbPos++] = '\n';
-                            }
+                            sb[sbPos++] = '\n';
                         } while (moved);
 
                         indent--;
@@ -2011,7 +2031,6 @@ namespace ScoredProductions.NanoJson {
                         bool moved = enumerator.MoveNext();
                         do {
                             ref readonly JsonMemory value = ref enumerator.Current;
-                            EnsureBufferCapacity(sbPos + value.KeyLen + 4, ref sb);
                             sb[sbPos++] = '"';
                             value.GetKeyAsSpan.CopyTo(sb.AsSpan(sbPos, value.KeyLen));
                             sbPos += value.KeyLen;
@@ -2027,7 +2046,6 @@ namespace ScoredProductions.NanoJson {
                         } while (moved);
                     }
 
-                    EnsureBufferCapacity(sbPos + 1, ref sb);
                     sb[sbPos++] = '}';
                     return;
                 }
@@ -2035,13 +2053,11 @@ namespace ScoredProductions.NanoJson {
                     int x;
                     int y;
                     if (pretty && !AsValue) {
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                         for (x = indent; --x >= 0;) {
                             indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
                             sbPos += INDENT_LEN;
                         }
                     }
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
                     sb[sbPos++] = '[';
 
                     if (this.InnerLength == 0) {
@@ -2060,22 +2076,17 @@ namespace ScoredProductions.NanoJson {
                             do {
                                 ref readonly JsonMemory value = ref enumerator.Current;
                                 if (HasFlag((long)JsonType.Value, (long)value.Type)) {
-                                    EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
                                     for (y = indent; --y >= 0;) {
                                         indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
                                         sbPos += INDENT_LEN;
                                     }
                                 }
                                 value.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                                EnsureBufferCapacity(sbPos + 2, ref sb);
                                 moved = enumerator.MoveNext();
                                 if (moved) {
                                     sb[sbPos++] = ',';
-                                    sb[sbPos++] = '\n';
                                 }
-                                else {
-                                    sb[sbPos++] = '\n';
-                                }
+                                sb[sbPos++] = '\n';
                             } while (moved);
 
                             indent--;
@@ -2091,13 +2102,11 @@ namespace ScoredProductions.NanoJson {
                                 value.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                                 moved = enumerator.MoveNext();
                                 if (moved) {
-                                    EnsureBufferCapacity(sbPos + 1, ref sb);
                                     sb[sbPos++] = ',';
                                 }
                             } while (moved);
                         }
 
-                        EnsureBufferCapacity(sbPos + 1, ref sb);
                         sb[sbPos++] = ']';
                     }
                     return;
@@ -2892,10 +2901,11 @@ namespace ScoredProductions.NanoJson {
         }
 
         private readonly ReadOnlySpan<ushort> source;
+
         private readonly int endIndex;
 
         private Vector<ushort> toCompare;
-        private Span<ushort> toCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
+        private Span<ushort> GetToCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
 
         public int CurrentIndex { get; private set; }
 
@@ -2905,6 +2915,7 @@ namespace ScoredProductions.NanoJson {
         public readonly bool CanAdvance => this.CurrentIndex < this.endIndex;
         public readonly bool CanRetreat => this.CurrentIndex > 0;
 
+        private readonly int Segment => Vector<ushort>.Count;
 
         public JsonReader(in ReadOnlySpan<char> data, bool fromEnd = false) {
             this.source = MemoryMarshal.Cast<char, ushort>(data);
@@ -2994,18 +3005,17 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceTo(ushort search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3025,18 +3035,17 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceToNot(ushort search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVectors = new Vector<ushort>(search);
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, searchVectors);
                 if (eq == Vector<ushort>.Zero) {
@@ -3055,22 +3064,21 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceTo(in ReadOnlySpan<ushort> search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             int searchLen = search.Length;
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 for (int i = 1; i < searchLen; i++) {
@@ -3093,22 +3101,21 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNot(in ReadOnlySpan<ushort> search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             int searchLen = search.Length;
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 for (int i = 1; i < searchLen; i++) {
@@ -3130,18 +3137,17 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToWhiteSpace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.LessThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3161,18 +3167,17 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNotWhiteSpace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.GreaterThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3192,21 +3197,20 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToValueEnding() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> commaVector = new Vector<ushort>(COMMA);
             Vector<ushort> rbraceVector = new Vector<ushort>(RBRACE);
             Vector<ushort> rbracketVector = new Vector<ushort>(RBRACKET);
             Vector<ushort> whitespace = new Vector<ushort>(33);
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.BitwiseOr(
                     Vector.LessThan(this.toCompare, whitespace),
@@ -3239,8 +3243,7 @@ namespace ScoredProductions.NanoJson {
             if (this.CurrentValue != LBRACE) {
                 this.AdvanceTo(LBRACE);
             }
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
                 new Vector<ushort>(QUOTE),
                 new Vector<ushort>(LBRACE),
@@ -3251,16 +3254,16 @@ namespace ScoredProductions.NanoJson {
             int searchLen = searchVectors.Length;
             bool WithinQuotes = false;
             int debth = 1; // Already within the first brace
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Continue:
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear(); // Remove trailing chars
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 if (WithinQuotes) {
@@ -3325,8 +3328,7 @@ namespace ScoredProductions.NanoJson {
             if (this.CurrentValue != LBRACKET) {
                 this.AdvanceTo(LBRACKET);
             }
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
                 new Vector<ushort>(QUOTE),
                 new Vector<ushort>(LBRACE),
@@ -3337,16 +3339,16 @@ namespace ScoredProductions.NanoJson {
             int searchLen = searchVectors.Length;
             bool WithinQuotes = false;
             int debth = 1; // Already within the first brace
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Continue:
             while (this.Increment()) {
-                if (this.CurrentIndex + segment > this.endIndex) {
+                if (this.CurrentIndex + this.Segment > this.endIndex) {
                     buf.Clear(); // Remove trailing chars
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
                 }
                 else {
-                    this.source.Slice(this.CurrentIndex, segment).CopyTo(buf);
+                    this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
                 if (WithinQuotes) {
@@ -3424,14 +3426,13 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int RetreatTo(ushort search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3456,14 +3457,13 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int RetreatToNot(ushort search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(search);
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3474,7 +3474,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
-                for (int i = segment - 1; i >= 0; i--) {
+                for (int i = this.Segment - 1; i >= 0; i--) {
                     if (eq[i] == 0) {
                         this.CurrentIndex = start + i;
                         return this.CurrentIndex;
@@ -3487,10 +3487,9 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatTo(in ReadOnlySpan<ushort> search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             int searchLen = search.Length;
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
@@ -3498,7 +3497,7 @@ namespace ScoredProductions.NanoJson {
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3513,7 +3512,7 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex -= segmentMinus;
                     continue;
                 }
-                for (int i = segment - 1; i >= 0; i--) {
+                for (int i = this.Segment - 1; i >= 0; i--) {
                     if (eq[i] > 0) {
                         this.CurrentIndex = start + i;
                         return this.CurrentValue;
@@ -3526,10 +3525,9 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToNot(in ReadOnlySpan<ushort> search) {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             int searchLen = search.Length;
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
@@ -3537,7 +3535,7 @@ namespace ScoredProductions.NanoJson {
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3551,7 +3549,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = segment - 1; i >= 0; i--) {
+                for (int i = this.Segment - 1; i >= 0; i--) {
                     if (eq[i] == 0) {
                         this.CurrentIndex = start + i;
                         return this.CurrentValue;
@@ -3564,14 +3562,13 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToWhiteSpace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' ' 
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3582,7 +3579,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = segment - 1; i >= 0; i--) {
+                for (int i = this.Segment - 1; i >= 0; i--) {
                     if (eq[i] == 0 && IsWhiteSpace(buf[i])) {
                         this.CurrentIndex = start + i;
                         return this.CurrentValue;
@@ -3595,14 +3592,13 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToNotWhiteSpace() {
-            int segment = Vector<ushort>.Count;
-            int segmentMinus = segment - 1;
+            int segmentMinus = this.Segment - 1;
             Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
-            Span<ushort> buf = this.toCompareSpan;
+            Span<ushort> buf = this.GetToCompareSpan;
             while (this.Decrement()) {
                 int start = this.CurrentIndex - segmentMinus;
                 if (start >= 0) {
-                    this.source.Slice(start, segment).CopyTo(buf);
+                    this.source.Slice(start, this.Segment).CopyTo(buf);
                 }
                 else {
                     buf.Clear();
@@ -3613,7 +3609,7 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = segment - 1; i >= 0; i--) {
+                for (int i = this.Segment - 1; i >= 0; i--) {
                     if (eq[i] == 0 && !IsWhiteSpace(buf[i])) {
                         this.CurrentIndex = start + i;
                         return this.CurrentValue;
@@ -4074,54 +4070,60 @@ namespace ScoredProductions.NanoJson {
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static JsonMemory[] Rent(int length) {
-                if (length < 1 || length > PoolMaxArrayLength) {
-                    throw new ArgumentOutOfRangeException(nameof(length), $"Length must be between 1 and {PoolMaxArrayLength}.");
-                }
                 return ContainerPool.Value.Rent(length);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void Return(JsonMemory[] array) {
-                if (array == null) {
-                    throw new ArgumentNullException(nameof(array));
-                }
                 ContainerPool.Value.Return(array, true);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
-                EnsureBufferCapacity<JsonMemory>(nextIndex, ref buffer, ContainerPool.Value);
+                if (nextIndex >= buffer.Length) {
+                    JsonMemory[] newArray = Rent(nextIndex + 1);
+                    buffer.CopyTo(newArray.AsSpan(0, buffer.Length));
+                    Return(buffer);
+                    buffer = newArray;
+                }
             }
 
             internal sealed class RentedContainer : IDisposable, IEnumerable<JsonMemory> {
-                public JsonMemory[] Value { get; private set; }
+                private volatile JsonMemory[] value;
+                public JsonMemory[] Value => this.value;
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public RentedContainer(int length) {
-                    this.Value = Rent(length);
+                    this.value = Rent(length);
                 }
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void Dispose() {
-                    this.CleanUp();
                     GC.SuppressFinalize(this);
+                    this.CleanUp();
                 }
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 ~RentedContainer() {
                     this.CleanUp();
                 }
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 private void CleanUp() {
-                    lock (this.Value) {
-                        if (this.Value != null) {
+                    lock (this.value) {
+                        if (this.value != null) {
                             Return(this.Value);
-                            this.Value = null;
+                            this.value = null;
                         }
                     }
                 }
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public IEnumerator<JsonMemory> GetEnumerator() {
                     return ((IEnumerable<JsonMemory>)this.Value).GetEnumerator();
                 }
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 IEnumerator IEnumerable.GetEnumerator() {
                     return this.GetEnumerator();
                 }
