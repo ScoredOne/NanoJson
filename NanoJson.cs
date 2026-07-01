@@ -1907,7 +1907,7 @@ namespace ScoredProductions.NanoJson {
                     }
             }
             (int totalCount, int maxDepth) = GetCountAndDepth(in this);
-            int estimatedCapacity = this.GetLength + ((INDENT_LEN + 8 * maxDepth) * totalCount); //  Reference Len * number of items * indent
+            int estimatedCapacity = (int)Math.Min((double)(this.GetLength + ((INDENT_LEN + 8 * maxDepth) * totalCount)), int.MaxValue); //  Reference Len * number of items * indent
 
             char[] buffer = ArrayPool<char>.Shared.Rent(estimatedCapacity); // 0 returns empty array?
             this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
@@ -2040,7 +2040,6 @@ namespace ScoredProductions.NanoJson {
                             value.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
                             moved = enumerator.MoveNext();
                             if (moved) {
-                                EnsureBufferCapacity(sbPos + 1, ref sb);
                                 sb[sbPos++] = ',';
                             }
                         } while (moved);
