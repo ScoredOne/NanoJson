@@ -1849,7 +1849,7 @@ namespace ScoredProductions.NanoJson {
 
         private static (int totalCount, int maxDepth) GetCountAndDepth(in JsonMemory value) {
             if (value.InnerLength == 0) {
-                return (0, 1);
+                return (1, 1);
             }
 
             int totalCount = value.InnerLength;
