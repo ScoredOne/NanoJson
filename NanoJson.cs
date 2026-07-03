@@ -12,18 +12,16 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.3.7                                      ///
+///     Version: 1.4.0                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
 using System;
 using System.Buffers;
-using System.Collections;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 using static ScoredProductions.NanoJson.NanoJsonStatics;
 
@@ -34,238 +32,79 @@ namespace ScoredProductions.NanoJson {
     [StructLayout(LayoutKind.Sequential)]
     public ref struct JsonSpan {
 
-        [StructLayout(LayoutKind.Sequential)]
-        public ref struct Enumerator {
-            private readonly ReadOnlySpan<char> ownerValue;
-            private JsonSpan current;
-            private JsonReader reader;
-            private readonly JsonType ownerType;
-            private int index;
-
-            internal Enumerator(in JsonSpan owner) {
-                this.ownerValue = owner.Value;
-                this.ownerType = owner.Type;
-                this.reader = new JsonReader(owner.Value);
-                this.index = -1;
-                this.current = Empty;
-                switch (this.ownerType) {
-                    case JsonType.Object:
-                        this.reader.AdvanceTo(LBRACE);
-                        break;
-                    case JsonType.Array:
-                        this.reader.AdvanceTo(LBRACKET);
-                        break;
-                }
-            }
-
-            public readonly JsonSpan Current => this.current;
-
-            public JsonSpan this[in int index]
-            {
-                get
-                {
-                    if (this.TryGetIndex(in index, out JsonSpan value)) {
-                        return value;
-                    }
-                    throw new IndexOutOfRangeException();
-                }
-            }
-
-            public bool TryGetIndex(in int index, out JsonSpan value) {
-                if (index < 0) {
-                    throw new ArgumentOutOfRangeException(nameof(index));
-                }
-                if (index == this.index) {
-                    value = this.current;
-                    return true;
-                }
-                int endLen = this.index;
-                bool found = false;
-                if (this.index > 0) {
-                    while (this.MoveNext()) {
-                        if (this.index == index) {
-                            found = true;
-                            goto Found;
-                        }
-                    }
-                    this.Reset();
-                    for (int x = 0; x < endLen; x++) {
-                        this.MoveNext();
-                        if (this.index == index) {
-                            found = true;
-                            goto Found;
-                        }
-                    }
-                }
-                else {
-                    while (this.MoveNext()) {
-                        if (this.index == index) {
-                            found = true;
-                            goto Found;
-                        }
-                    }
-                }
-                Found:
-                if (found) {
-                    value = this.current;
-                    return true;
-                }
-                else {
-                    value = Empty;
-                    return false;
-                }
-            }
-
-            public JsonSpan this[in ReadOnlySpan<char> key]
-            {
-                get
-                {
-                    if (this.TryGetKey(in key, out JsonSpan value)) {
-                        return value;
-                    }
-                    throw new ArgumentException("Key not found", nameof(key));
-                }
-            }
-
-            public bool TryGetKey(in ReadOnlySpan<char> key, out JsonSpan value) {
-                if (key.IsEmpty) {
-                    throw new ArgumentOutOfRangeException(nameof(key));
-                }
-                if (!HasFlag((long)JsonType.Object, (long)this.ownerType)) {
-                    value = Empty;
-                    return false;
-                }
-
-                int keyhash = ComputeHash(in key, out int pathLen);
-                int valueKey;
-                int valueLen;
-                int endLen = this.index;
-                if (endLen < 0) {
-                    if (!this.MoveNext()) {
-                        value = Empty;
-                        return false;
-                    }
-                }
-                do {
-                    valueKey = ComputeHash(this.current.Key, out valueLen);
-                    if (keyhash == valueKey) {
-                        value = this.current;
-                        return true;
-                    }
-                    else {
-                        if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
-                            if (this.current.TryGetKey(key[++valueLen..], out value)) {
-                                return true;
-                            }
-                        }
-                    }
-                } while (this.MoveNext());
-                if (endLen > 0) {
-                    this.Reset();
-                    for (int x = 0; x < endLen; x++) {
-                        this.MoveNext();
-                        valueKey = ComputeHash(this.current.Key, out valueLen);
-                        if (keyhash == valueKey) {
-                            value = this.current;
-                            return true;
-                        }
-                        else {
-                            if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
-                                if (this.current.TryGetKey(key[++valueLen..], out value)) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-                value = Empty;
-                return false;
-            }
-
-            public bool MoveNext() {
-                switch (this.ownerType) {
-                    case JsonType.Object: {
-                        ref JsonReader providedReader = ref this.reader;
-                        providedReader.AdvanceToNotWhiteSpace();
-                        if (providedReader.CurrentValue != QUOTE) {
-                            providedReader.AdvanceTo(QUOTE);
-                        }
-                        ReadOnlySpan<char> name;
-                        int left;
-                        if (providedReader.Advance() == QUOTE) {
-                            name = ReadOnlySpan<char>.Empty;
-                        }
-                        else {
-                            left = providedReader.CurrentIndex;
-                            providedReader.AdvanceTo(QUOTE);
-                            name = this.ownerValue.Slice(left, providedReader.CurrentIndex - left);
-                        }
-                        providedReader.AdvanceTo(COLON);
-                        providedReader.AdvanceToNotWhiteSpace();
-                        left = providedReader.CurrentIndex;
-                        this.index++;
-                        this.current = new JsonSpan(name, ref providedReader);
-                        switch (providedReader.CurrentValue) {
-                            case COMMA:
-                            case RBRACE:
-                            case RBRACKET:
-                                break;
-                            default: {
-                                providedReader.AdvanceToNotWhiteSpace();
-                                break;
-                            }
-                        }
-                        if (left == providedReader.CurrentIndex) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    case JsonType.Array: {
-                        ref JsonReader providedReader = ref this.reader;
-                        providedReader.AdvanceToNotWhiteSpace();
-                        int left = providedReader.CurrentIndex;
-                        this.index++;
-                        this.current = new JsonSpan(ReadOnlySpan<char>.Empty, ref providedReader);
-                        switch (providedReader.CurrentValue) {
-                            case COMMA:
-                            case RBRACE:
-                            case RBRACKET:
-                                break;
-                            default: {
-                                providedReader.AdvanceToNotWhiteSpace();
-                                break;
-                            }
-                        }
-                        if (left == providedReader.CurrentIndex) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    default:
-                        return false;
-                }
-            }
-
-            public void Reset() {
-                this.index = -1;
-                this.reader.SetIndexToStart();
-            }
-        }
-
         public static JsonSpan Empty => new JsonSpan(true);
 
+        public readonly bool IsEmpty;
+        public readonly JsonType Type;
         public readonly ReadOnlySpan<char> Key;
         public readonly ReadOnlySpan<char> Value;
-        public readonly JsonType Type;
-        public readonly bool IsEmpty;
 
-        public readonly bool IsNothing => this.Key == ReadOnlySpan<char>.Empty && this.Value == ReadOnlySpan<char>.Empty;
+        private bool currentIsEmpty;
+        private int index;
+        private JsonType currentType;
+        private JsonReader reader;
+        private ReadOnlySpan<char> currentKey;
+        private ReadOnlySpan<char> currentValue;
+
+
+        public readonly JsonSpan Current => new JsonSpan(in this.currentKey, in this.currentValue, in this.currentType, in this.currentIsEmpty);
+        public readonly bool IsNothing => this.Key.IsEmpty && this.Value.IsEmpty;
+
+        public readonly bool IsString => HasFlag((long)this.Type, (long)JsonType.String);
+        public readonly bool IsBool => HasFlag((long)this.Type, (long)JsonType.Boolean);
+        public readonly bool IsNumber => HasFlag((long)this.Type, (long)JsonType.Number);
+        public readonly bool IsNull => HasFlag((long)this.Type, (long)JsonType.Null);
+        public readonly bool IsArray => HasFlag((long)this.Type, (long)JsonType.Array);
+        public readonly bool IsObject => HasFlag((long)this.Type, (long)JsonType.Object);
+        public readonly bool IsValue => this.IsString || this.IsBool || this.IsNumber || this.IsNull;
+        public readonly bool IsContainer => this.IsArray || this.IsObject;
 
         private JsonSpan(bool _) {
             this.Type = JsonType.Null;
+            this.currentType = 0;
             this.Key = ReadOnlySpan<char>.Empty;
             this.Value = ReadOnlySpan<char>.Empty;
             this.IsEmpty = true;
+
+            this.currentIsEmpty = true;
+            this.reader = JsonReader.Empty;
+            this.currentKey = ReadOnlySpan<char>.Empty;
+            this.currentValue = ReadOnlySpan<char>.Empty;
+            this.index = -1;
+        }
+
+        /// <summary>
+        /// Constructor for this.Current only
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="read"></param>
+        /// <param name="type"></param>
+        /// <param name="empty"></param>
+        private JsonSpan(in ReadOnlySpan<char> key, in ReadOnlySpan<char> read, in JsonType type, in bool empty) {
+            this.Type = type;
+            this.Key = key;
+            this.Value = read;
+            this.IsEmpty = empty;
+
+            switch (this.Type) {
+                case JsonType.Array:
+                    this.reader = new JsonReader(this.Value);
+                    this.reader.AdvanceTo(LBRACKET);
+                    break;
+                case JsonType.Object:
+                    this.reader = new JsonReader(this.Value);
+                    this.reader.AdvanceTo(LBRACE);
+                    break;
+                default:
+                    this.reader = JsonReader.Empty;
+                    break;
+            }
+
+            this.currentIsEmpty = true;
+            this.currentKey = ReadOnlySpan<char>.Empty;
+            this.currentValue = ReadOnlySpan<char>.Empty;
+            this.currentType = 0;
+            this.index = -1;
         }
 
         public JsonSpan(string data) : this(data.AsSpan()) { }
@@ -273,119 +112,8 @@ namespace ScoredProductions.NanoJson {
 
         public JsonSpan(string key, string value) : this(key.AsSpan(), value.AsSpan()) { }
         public JsonSpan(in ReadOnlySpan<char> key, in ReadOnlySpan<char> read) {
-            if (read.IsEmpty) {
-                this = Empty;
-                this.Key = key;
-                return;
-            }
-            this.Key = key;
-            int len = read.Length;
-            ReadOnlySpan<ushort> data = MemoryMarshal.Cast<char, ushort>(read);
-            int x = -1;
-            while (IsWhiteSpace(data[++x])) { }
-            while (IsWhiteSpace(data[--len])) { }
-            len++;
-            switch (data[x]) {
-                case QUOTE: {
-                    this.Type = JsonType.String;
-                    while (true) {
-                        if (data[--len] == QUOTE) {
-                            break;
-                        }
-                    }
-                    if (len == ++x) {
-                        this.Value = ReadOnlySpan<char>.Empty;
-                        this.IsEmpty = true;
-                    }
-                    else {
-                        this.Value = read.Slice(x, len - x);
-                        this.IsEmpty = false;
-                    }
-                    return;
-                }
-                case LBRACKET: {
-                    this.Type = JsonType.Array;
-                    int f = x;
-                    while (true) {
-                        if (data[--len] == RBRACKET) {
-                            break;
-                        }
-                    }
-                    while (IsWhiteSpace(read[++x])) { }
-                    if (x == len) {
-                        this.Value = ReadOnlySpan<char>.Empty;
-                        this.IsEmpty = true;
-                    }
-                    else {
-                        this.Value = read.Slice(f, len - f + 1);
-                        this.IsEmpty = false;
-                    }
-                    return;
-                }
-                case LBRACE: {
-                    this.Type = JsonType.Object;
-                    int f = x;
-                    while (true) {
-                        if (data[--len] == RBRACE) {
-                            break;
-                        }
-                    }
-                    while (IsWhiteSpace(data[++x])) { }
-                    if (x == len) {
-                        this.Value = ReadOnlySpan<char>.Empty;
-                        this.IsEmpty = true;
-                    }
-                    else {
-                        this.Value = read.Slice(f, len - f + 1);
-                        this.IsEmpty = false;
-                    }
-                    return;
-                }
-                case N_LOWER:
-                case N_UPPER: {
-                    this.Type = JsonType.Null;
-                    this.Value = NULL.AsSpan();
-                    this.IsEmpty = false;
-                    if (len - x == 4 && this.Value.Equals(read.Slice(x, 4), StringComparison.OrdinalIgnoreCase)) {
-                        return;
-                    }
-
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {read.ToString()})", nameof(read));
-                }
-                case T_LOWER:
-                case T_UPPER: {
-                    this.Type = JsonType.Boolean;
-                    this.Value = bool.TrueString.AsSpan();
-                    this.IsEmpty = false;
-                    if (len - x == 4 && this.Value.Equals(read.Slice(x, 4), StringComparison.OrdinalIgnoreCase)) {
-                        return;
-                    }
-
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {read.ToString()})", nameof(read));
-                }
-                case F_LOWER:
-                case F_UPPER: {
-                    this.Type = JsonType.Boolean;
-                    this.Value = bool.FalseString.AsSpan();
-                    this.IsEmpty = false;
-                    if (len - x == 5 && this.Value.Equals(read.Slice(x, 5), StringComparison.OrdinalIgnoreCase)) {
-                        return;
-                    }
-
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {read.ToString()})", nameof(read));
-                }
-                default: {
-                    this.Type = JsonType.Number;
-                    this.IsEmpty = false;
-                    this.Value = read.Slice(x, len - x);
-
-                    if (IsNumber(this.Value)) {
-                        return;
-                    }
-                    throw new ArgumentException($"Parse failed (TryParse: {read.ToString()})", nameof(read));
-                }
-            }
-            throw new ArgumentException($"Parse failed (TryParse: {read.ToString()})", nameof(read));
+            JsonReader reader = new JsonReader(in read);
+            this = new JsonSpan(in key, ref reader, false);
         }
 
         /// <summary>
@@ -394,13 +122,41 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <param name="reader"></param>
         /// <exception cref="ArgumentException"></exception>
-        private JsonSpan(in ReadOnlySpan<char> key, ref JsonReader reader) {
-            if (!reader.CanAdvance) {
-                this = Empty;
-                this.Key = key;
-                return;
-            }
+        private JsonSpan(in ReadOnlySpan<char> key, ref JsonReader reader, bool continuous) {
+            this.currentKey = ReadOnlySpan<char>.Empty;
+            this.currentValue = ReadOnlySpan<char>.Empty;
+            this.currentType = 0;
+            this.currentIsEmpty = true;
+            this.index = -1;
             this.Key = key;
+
+            if (TryParseValueFromReader(ref reader, continuous, out this.Type, out this.Value, out this.IsEmpty)) {
+                if (HasFlag((long)this.Type, (long)JsonType.Object)) {
+                    this.reader = new JsonReader(this.Value);
+                    this.reader.AdvanceTo(LBRACE);
+                }
+                else if (HasFlag((long)this.Type, (long)JsonType.Array)) {
+                    this.reader = new JsonReader(this.Value);
+                    this.reader.AdvanceTo(LBRACKET);
+                }
+                else {
+                    this.reader = JsonReader.Empty;
+                }
+            }
+            else {
+                this = JsonSpan.Empty;
+                this.Key = key;
+            }
+        }
+
+        private static bool TryParseValueFromReader(ref JsonReader reader, bool continuous, out JsonType type, out ReadOnlySpan<char> value, out bool isEmpty) {
+            if (!reader.CanAdvance) {
+                type = JsonType.Null;
+                value = ReadOnlySpan<char>.Empty;
+                isEmpty = true;
+                return false;
+            }
+
             ushort first;
             if (reader.CurrentIndex < 0 || IsWhiteSpace(reader.CurrentValue)) {
                 first = reader.AdvanceToNotWhiteSpace();
@@ -411,65 +167,97 @@ namespace ScoredProductions.NanoJson {
 
             switch (first) {
                 case QUOTE: {
-                    this.Type = JsonType.String;
+                    type = JsonType.String;
                     int left = reader.CurrentIndex + 1;
-                    reader.AdvanceTo(QUOTE);
-                    if (left == reader.CurrentIndex) {
-                        this.Value = ReadOnlySpan<char>.Empty;
-                        this.IsEmpty = true;
+                    int right;
+                    if (continuous) {
+                        right = reader.AdvanceTo(QUOTE);
                     }
                     else {
-                        this.Value = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, reader.CurrentIndex - left));
-                        this.IsEmpty = false;
+                        reader.SetIndexToEnd();
+                        right = reader.RetreatTo(QUOTE);
                     }
-                    return;
+                    reader.Increment();
+                    if (left == right) {
+                        value = ReadOnlySpan<char>.Empty;
+                        isEmpty = true;
+                    }
+                    else {
+                        value = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right - left));
+                        isEmpty = false;
+                    }
+                    return true;
                 }
                 case LBRACKET: {
-                    this.Type = JsonType.Array;
+                    type = JsonType.Array;
                     int left = reader.CurrentIndex;
                     if (reader.AdvanceToNotWhiteSpace() == RBRACKET) {
-                        this.IsEmpty = true;
+                        isEmpty = true;
                     }
                     else {
-                        this.IsEmpty = false;
-                        reader.SetIndexPosition(left);
-                        reader.AdvanceToEndOfArray();
+                        isEmpty = false;
+                        if (continuous) {
+                            reader.SetIndexPosition(left);
+                            reader.AdvanceToEndOfArray();
+                        }
+                        else {
+                            reader.SetIndexToEnd();
+                            reader.RetreatTo(RBRACKET);
+                        }
                         if (reader.CurrentValue != RBRACKET) {
                             throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                         }
                     }
-                    reader.Increment();
-                    ReadOnlySpan<ushort> container = reader.Slice(left, reader.CurrentIndex - left);
-                    this.Value = MemoryMarshal.Cast<ushort, char>(container);
-                    return;
-                }
-                case LBRACE: {
-                    this.Type = JsonType.Object;
-                    int left = reader.CurrentIndex;
-                    if (reader.AdvanceToNotWhiteSpace() == RBRACE) {
-                        this.IsEmpty = true;
+                    int right;
+                    if (reader.Increment()) {
+                        right = reader.CurrentIndex - left;
                     }
                     else {
-                        this.IsEmpty = false;
-                        reader.SetIndexPosition(left);
-                        reader.AdvanceToEndOfObject();
+                        right = reader.CurrentIndex - left + 1;
+                    }
+                    ReadOnlySpan<ushort> container = reader.Slice(left, right);
+                    value = MemoryMarshal.Cast<ushort, char>(container);
+                    return true;
+                }
+                case LBRACE: {
+                    type = JsonType.Object;
+                    int left = reader.CurrentIndex;
+                    if (reader.AdvanceToNotWhiteSpace() == RBRACE) {
+                        isEmpty = true;
+                    }
+                    else {
+                        isEmpty = false;
+                        if (continuous) {
+                            reader.SetIndexPosition(left);
+                            reader.AdvanceToEndOfObject();
+                        }
+                        else {
+                            reader.SetIndexToEnd();
+                            reader.RetreatTo(RBRACE);
+                        }
                         if (reader.CurrentValue != RBRACE) {
                             throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                         }
                     }
-                    reader.Increment();
-                    ReadOnlySpan<ushort> container = reader.Slice(left, reader.CurrentIndex - left);
-                    this.Value = MemoryMarshal.Cast<ushort, char>(container);
-                    return;
+                    int right;
+                    if (reader.Increment()) {
+                        right = reader.CurrentIndex - left;
+                    }
+                    else {
+                        right = reader.CurrentIndex - left + 1;
+                    }
+                    ReadOnlySpan<ushort> container = reader.Slice(left, right);
+                    value = MemoryMarshal.Cast<ushort, char>(container);
+                    return true;
                 }
                 case N_LOWER:
                 case N_UPPER: {
-                    this.Type = JsonType.Null;
-                    this.Value = NULL.AsSpan();
-                    this.IsEmpty = false;
+                    type = JsonType.Null;
+                    value = NULL.AsSpan();
+                    isEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
 
                     if (right == 4) {
                         ReadOnlySpan<ushort> data = reader.Slice(left, right);
@@ -479,23 +267,22 @@ namespace ScoredProductions.NanoJson {
                             if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
                                 c = data[3];
                                 if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                    return;
+                                    return true;
                                 }
                             }
                         }
-                        return;
                     }
 
                     throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                 }
                 case T_LOWER:
                 case T_UPPER: {
-                    this.Type = JsonType.Boolean;
-                    this.Value = bool.TrueString.AsSpan();
-                    this.IsEmpty = false;
+                    type = JsonType.Boolean;
+                    value = bool.TrueString.AsSpan();
+                    isEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
 
                     if (right == 4) {
                         ReadOnlySpan<ushort> toCompare = reader.Slice(left, right);
@@ -505,23 +292,23 @@ namespace ScoredProductions.NanoJson {
                             if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
                                 c = toCompare[3];
                                 if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                    return;
+                                    return true;
                                 }
                             }
                         }
-                        return;
                     }
 
                     throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                 }
                 case F_LOWER:
                 case F_UPPER: {
-                    this.Type = JsonType.Boolean;
-                    this.Value = bool.FalseString.AsSpan();
-                    this.IsEmpty = false;
+                    type = JsonType.Boolean;
+                    value = bool.FalseString.AsSpan();
+                    isEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
+
                     if (right == 5) {
                         ReadOnlySpan<ushort> data = reader.Slice(left, right);
                         ushort c = data[1];
@@ -532,7 +319,7 @@ namespace ScoredProductions.NanoJson {
                                 if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
                                     c = data[4];
                                     if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                        return;
+                                        return true;
                                     }
                                 }
                             }
@@ -542,18 +329,20 @@ namespace ScoredProductions.NanoJson {
                     throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                 }
                 default: {
-                    this.Type = JsonType.Number;
-                    this.IsEmpty = false;
+                    type = JsonType.Number;
+                    isEmpty = false;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    this.Value = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, reader.CurrentIndex - left));
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
+                    value = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right));
 
-                    if (IsNumber(this.Value)) {
-                        return;
+                    if (IsNumber(value)) {
+                        return true;
                     }
                     throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
                 }
             }
+
             throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
         }
 
@@ -567,132 +356,42 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                switch (this.Type) {
-                    case JsonType.Object:
-                    case JsonType.Array:
-                        if (this.TryGetIndex(in index, out JsonSpan v)) {
-                            return v;
-                        }
-                        goto default;
-                    default:
-                        throw new IndexOutOfRangeException();
+                if (this.IsContainer) {
+                    ref readonly JsonSpan t = ref this;
+                    if (t.TryGetIndex(in index, out JsonSpan v)) {
+                        return v;
+                    }
                 }
+                throw new IndexOutOfRangeException();
             }
         }
 
-        public readonly bool TryGetIndex(in int index, out JsonSpan value) {
-            if (!HasFlag((long)JsonType.Container, (long)this.Type)) {
-                value = Empty;
-                return false;
-            }
-
-            JsonReader providedReader = new JsonReader(this.Value);
-            int currentIndex = -1;
-            switch (this.Type) {
-                case JsonType.Object: {
-                    providedReader.AdvanceTo(LBRACE);
-                    do {
-                        if (!providedReader.CanAdvance) {
-                            value = Empty;
-                            return false;
-                        }
-                        providedReader.AdvanceToNotWhiteSpace();
-                        if (providedReader.CurrentValue != QUOTE) {
-                            providedReader.AdvanceTo(QUOTE);
-                        }
-                        ReadOnlySpan<char> name;
-                        if (providedReader.Advance() == QUOTE) {
-                            name = ReadOnlySpan<char>.Empty;
-                        }
-                        else {
-                            int left = providedReader.CurrentIndex;
-                            providedReader.AdvanceTo(QUOTE);
-                            name = this.Value.Slice(left, providedReader.CurrentIndex - left);
-                        }
-                        providedReader.AdvanceTo(COLON);
-                        providedReader.AdvanceToNotWhiteSpace();
-                        value = new JsonSpan(name, ref providedReader);
-                        switch (providedReader.CurrentValue) {
-                            case COMMA:
-                            case RBRACE:
-                            case RBRACKET:
-                                break;
-                            default: {
-                                providedReader.AdvanceToNotWhiteSpace();
-                                break;
-                            }
-                        }
-                    } while (++currentIndex < index);
-                    return true;
-                }
-                case JsonType.Array: {
-                    providedReader.AdvanceTo(LBRACKET);
-                    do {
-                        if (!providedReader.CanAdvance) {
-                            value = Empty;
-                            return false;
-                        }
-                        providedReader.AdvanceToNotWhiteSpace();
-                        int left = providedReader.CurrentIndex;
-                        value = new JsonSpan(ReadOnlySpan<char>.Empty, ref providedReader);
-                        switch (providedReader.CurrentValue) {
-                            case COMMA:
-                            case RBRACE:
-                            case RBRACKET:
-                                break;
-                            default: {
-                                providedReader.AdvanceToNotWhiteSpace();
-                                break;
-                            }
-                        }
-                    } while (++currentIndex < index);
-                    return true;
-                }
-                default:
-                    value = Empty;
+        public bool MoveNext() {
+            if (this.IsObject) {
+                ref JsonReader providedReader = ref this.reader;
+                if (!providedReader.CanAdvance) {
+                    this.currentKey = ReadOnlySpan<char>.Empty;
+                    this.currentValue = ReadOnlySpan<char>.Empty;
                     return false;
-            }
-        }
-
-        public readonly JsonSpan this[in string key] => this[key.AsSpan()];
-
-        public readonly JsonSpan this[in ReadOnlySpan<char> key]
-        {
-            get
-            {
-                if (HasFlag((long)JsonType.Object, (long)this.Type) && this.TryGetKey(in key, out JsonSpan v)) {
-                    return v;
                 }
-                return Empty;
-            }
-        }
-
-        public readonly bool TryGetKey(in ReadOnlySpan<char> key, out JsonSpan value) {
-            if (this.Type != JsonType.Object) {
-                value = Empty;
-                return false;
-            }
-
-            int keyhash = ComputeHash(in key, out int pathLen);
-            JsonReader providedReader = new JsonReader(this.Value);
-            providedReader.AdvanceTo(LBRACE);
-            ReadOnlySpan<char> name;
-            while (providedReader.CanAdvance) {
                 providedReader.AdvanceToNotWhiteSpace();
                 if (providedReader.CurrentValue != QUOTE) {
                     providedReader.AdvanceTo(QUOTE);
                 }
+                int left;
                 if (providedReader.Advance() == QUOTE) {
-                    name = ReadOnlySpan<char>.Empty;
+                    this.currentKey = ReadOnlySpan<char>.Empty;
                 }
                 else {
-                    int left = providedReader.CurrentIndex;
+                    left = providedReader.CurrentIndex;
                     providedReader.AdvanceTo(QUOTE);
-                    name = this.Value.Slice(left, providedReader.CurrentIndex - left);
+                    this.currentKey = this.Value.Slice(left, providedReader.CurrentIndex - left);
                 }
                 providedReader.AdvanceTo(COLON);
                 providedReader.AdvanceToNotWhiteSpace();
-                value = new JsonSpan(name, ref providedReader);
+                left = providedReader.CurrentIndex;
+                this.index++;
+                TryParseValueFromReader(ref providedReader, true, out this.currentType, out this.currentValue, out this.currentIsEmpty);
                 switch (providedReader.CurrentValue) {
                     case COMMA:
                     case RBRACE:
@@ -703,15 +402,157 @@ namespace ScoredProductions.NanoJson {
                         break;
                     }
                 }
+                if (left == providedReader.CurrentIndex) {
+                    return false;
+                }
+                return true;
+            }
+            else if (this.IsArray) {
+                ref JsonReader providedReader = ref this.reader;
+                if (!providedReader.CanAdvance) {
+                    this.currentValue = ReadOnlySpan<char>.Empty;
+                    return false;
+                }
+                providedReader.AdvanceToNotWhiteSpace();
+                int left = providedReader.CurrentIndex;
+                this.index++;
+                TryParseValueFromReader(ref providedReader, true, out this.currentType, out this.currentValue, out this.currentIsEmpty);
+                switch (providedReader.CurrentValue) {
+                    case COMMA:
+                    case RBRACE:
+                    case RBRACKET:
+                        break;
+                    default: {
+                        providedReader.AdvanceToNotWhiteSpace();
+                        break;
+                    }
+                }
+                if (left == providedReader.CurrentIndex) {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
 
-                int valueKey = ComputeHash(value.Key, out int valueLen);
+        public void Reset() {
+            this.currentIsEmpty = false;
+            this.currentType = 0;
+            this.currentKey = ReadOnlySpan<char>.Empty;
+            this.currentValue = ReadOnlySpan<char>.Empty;
+            this.index = -1;
+            this.reader.SetIndexToStart();
+            if (this.IsObject) {
+                this.reader.AdvanceTo(LBRACE);
+            }
+            else if (this.IsArray) {
+                this.reader.AdvanceTo(LBRACKET);
+            }
+        }
+
+        public bool TryGetIndex(in int index, out JsonSpan value) {
+            if (index < 0) {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
+            if (index == this.index) {
+                value = this.Current;
+                return true;
+            }
+            int endLen = this.index;
+            if (this.index > 0) {
+                while (this.MoveNext()) {
+                    if (this.index == index) {
+                        value = this.Current;
+                        return true;
+                    }
+                }
+                this.Reset();
+                for (int x = 0; x < endLen; x++) {
+                    this.MoveNext();
+                    if (this.index == index) {
+                        value = this.Current;
+                        return true;
+                    }
+                }
+            }
+            else {
+                while (this.MoveNext()) {
+                    if (this.index == index) {
+                        value = this.Current;
+                        return true;
+                    }
+                }
+            }
+            value = Empty;
+            return false;
+        }
+
+        public readonly JsonSpan this[in string key] => this[key.AsSpan()];
+
+        public readonly JsonSpan this[in ReadOnlySpan<char> key]
+        {
+            get
+            {
+                if (this.IsObject) {
+                    ref readonly JsonSpan t = ref this;
+                    if (t.TryGetKey(in key, out JsonSpan v)) {
+                        return v;
+                    }
+                }
+                return Empty;
+            }
+        }
+
+        public bool TryGetKey(in ReadOnlySpan<char> key, out JsonSpan value) {
+            if (key.IsEmpty) {
+                throw new ArgumentOutOfRangeException(nameof(key));
+            }
+            if (!this.IsObject) {
+                value = Empty;
+                return false;
+            }
+
+            int keyhash = ComputeHash(in key, out int pathLen);
+            int valueKey;
+            int valueLen;
+            int endLen = this.index;
+            if (endLen < 0) {
+                if (!this.MoveNext()) {
+                    value = Empty;
+                    return false;
+                }
+            }
+            JsonSpan current;
+            do {
+                current = this.Current;
+                valueKey = ComputeHash(current.Key, out valueLen);
                 if (keyhash == valueKey) {
+                    value = current;
                     return true;
                 }
                 else {
                     if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
-                        if (value.TryGetKey(key[++valueLen..], out value)) {
+                        if (current.TryGetKey(key[++valueLen..], out value)) {
                             return true;
+                        }
+                    }
+                }
+            } while (this.MoveNext());
+            if (endLen > 0) {
+                this.Reset();
+                for (int x = 0; x < endLen; x++) {
+                    this.MoveNext();
+                    current = this.Current;
+                    valueKey = ComputeHash(current.Key, out valueLen);
+                    if (keyhash == valueKey) {
+                        value = current;
+                        return true;
+                    }
+                    else {
+                        if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
+                            if (current.TryGetKey(key[++valueLen..], out value)) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -720,7 +561,7 @@ namespace ScoredProductions.NanoJson {
             return false;
         }
 
-        public readonly Enumerator GetEnumerator() => new Enumerator(in this);
+        public readonly JsonSpan GetEnumerator() => this;
 
         /// <summary>
         /// Get the length of the reference area
@@ -744,14 +585,16 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(in key, out JsonSpan value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+        public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) {
+            return this.TryGetKey(in key, out JsonSpan value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+        }
         /// <summary>
         /// Try to get the string value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
-            if (this.TryGetKey(key, out JsonSpan value) && HasFlag((long)JsonType.String, (long)value.Type)) {
+        public bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
+            if (this.TryGetKey(key, out JsonSpan value) && value.IsString) {
                 @out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
                 return true;
             }
@@ -761,9 +604,9 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public override readonly string ToString() => this.ToString(Default_ToStringFormat);
+        public override string ToString() => this.ToString(Default_ToStringFormat);
 
-        public readonly string ToString(ToStringFormat format) {
+        public string ToString(ToStringFormat format) {
             int indent = 0;
             int pos = 0;
 
@@ -772,40 +615,41 @@ namespace ScoredProductions.NanoJson {
             bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
 
-            switch (this.Type) {
-                case JsonType.String:
-                    if (translateUnicode) {
-                        return this.GetStringDecoded;
-                    }
-                    else {
-                        return this.GetStringLiteral;
-                    }
-                case JsonType.Null:
-                    if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
-                        return null;
-                    }
-                    else {
-                        return NULL;
-                    }
-                case JsonType.Number:
-                    if (reparseNumbers) {
-                        return this.GetNumberString;
-                    }
-                    else {
-                        return this.GetStringLiteral;
-                    }
-                case JsonType.Boolean:
-                    if (MemoryMarshal.GetReference(this.Value) == 'T') {
-                        return lowerCaseBool ? TRUE_l : TRUE_u;
-                    }
-                    else {
-                        return lowerCaseBool ? FALSE_l : FALSE_u;
-                    }
+            if (this.IsString) {
+                if (translateUnicode) {
+                    return this.GetStringDecoded;
+                }
+                else {
+                    return this.GetStringLiteral;
+                }
             }
-
-            char[] buffer = ArrayPool<char>.Shared.Rent(this.GetLength * (INDENT_LEN * 4));
-            this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref buffer, ref indent, ref pos, INDENT_TABS.AsSpan());
-            string builtString = buffer.AsSpan().Slice(0, pos).ToString();
+            else if (this.IsNull) {
+                if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                    return null;
+                }
+                else {
+                    return NULL;
+                }
+            }
+            else if (this.IsNumber) {
+                if (reparseNumbers) {
+                    return this.GetNumberString;
+                }
+                else {
+                    return this.GetStringLiteral;
+                }
+            }
+            else if (this.IsBool) {
+                if (MemoryMarshal.GetReference(this.Value) == 'T') {
+                    return lowerCaseBool ? TRUE_l : TRUE_u;
+                }
+                else {
+                    return lowerCaseBool ? FALSE_l : FALSE_u;
+                }
+            }
+            char[] buffer = ArrayPool<char>.Shared.Rent((int)Math.Min((double)this.GetLength * (INDENT_LEN * 4), int.MaxValue));
+            this.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, buffer.AsSpan(), ref indent, ref pos, INDENT_TABS.AsSpan());
+            string builtString = string.Create(pos, (buffer, pos), (span, state) => state.buffer.AsSpan(0, state.pos).CopyTo(span));
             ArrayPool<char>.Shared.Return(buffer);
             return builtString;
         }
@@ -813,208 +657,174 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Recursive method to build the json ToString output
         /// </summary>
-        private readonly void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, in bool reparseNumbers, ref char[] sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
-            switch (this.Type) {
-                case JsonType.String: {
-                    EnsureBufferCapacity(sbPos + this.GetLength + 2, ref sb);
-                    sb[sbPos++] = '"';
-                    if (translateUnicode) {
-                        TranslateUnicodeIntoBufferFromSpan(this.Value, sb.AsSpan(), ref sbPos);
-                    }
-                    else {
-                        ReadOnlySpan<char> refSpan = this.Value;
-                        refSpan.CopyTo(sb.AsSpan(sbPos, this.GetLength));
-                        sbPos += this.GetLength;
-                    }
-                    sb[sbPos++] = '"';
-                    return;
+        private void ProcessString(bool AsValue, in bool pretty, in bool translateUnicode, in bool lowerCaseBool, in bool reparseNumbers, in Span<char> sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
+            if (this.IsString) {
+                sb[sbPos++] = '"';
+                if (translateUnicode) {
+                    TranslateUnicodeIntoBufferFromSpan(this.Value, in sb, ref sbPos);
                 }
-                case JsonType.Null: {
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
-                    this.Value.CopyTo(sb.AsSpan(sbPos, 4));
-                    sbPos += 4;
-                    return;
-                }
-                case JsonType.Number: {
-                    if (reparseNumbers) {
-                        EnsureBufferCapacity(sbPos + 32, ref sb);
-                        this.GetNumber.TryFormat(sb.AsSpan(sbPos), out int refSpanLen);
-                        sbPos += refSpanLen;
-                    }
-                    else {
-                        EnsureBufferCapacity(sbPos + this.GetLength, ref sb);
-                        this.Value.CopyTo(sb.AsSpan(sbPos, this.GetLength));
-                        sbPos += this.GetLength;
-                    }
-                    return;
-                }
-                case JsonType.Boolean: {
-                    EnsureBufferCapacity(sbPos + 5, ref sb);
-                    this.Value.CopyTo(sb.AsSpan(sbPos, this.GetLength));
-                    if (lowerCaseBool) {
-                        switch (MemoryMarshal.GetReference(this.Value)) {
-                            case 'F':
-                                sb[sbPos] = 'f';
-                                break;
-                            case 'T':
-                                sb[sbPos] = 't';
-                                break;
-                        }
-                    }
+                else {
+                    ReadOnlySpan<char> refSpan = this.Value;
+                    refSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
                     sbPos += this.GetLength;
-                    return;
                 }
-                case JsonType.Object: {
-                    int x;
-                    int y;
-                    if (pretty && !AsValue) {
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                        for (x = indent; --x >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
-                        }
+                sb[sbPos++] = '"';
+            }
+            else if (this.IsNull) {
+                this.Value.CopyTo(sb.Slice(sbPos, 4));
+                sbPos += 4;
+            }
+            else if (this.IsNumber) {
+                if (reparseNumbers) {
+                    this.GetNumber.TryFormat(sb.Slice(sbPos), out int refSpanLen);
+                    sbPos += refSpanLen;
+                }
+                else {
+                    this.Value.CopyTo(sb.Slice(sbPos, this.GetLength));
+                    sbPos += this.GetLength;
+                }
+            }
+            else if (this.IsBool) {
+                this.Value.CopyTo(sb.Slice(sbPos, this.GetLength));
+                if (lowerCaseBool) {
+                    switch (MemoryMarshal.GetReference(this.Value)) {
+                        case 'F':
+                            sb[sbPos] = 'f';
+                            break;
+                        case 'T':
+                            sb[sbPos] = 't';
+                            break;
                     }
-
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
-                    sb[sbPos++] = '{';
-                    if (this.IsEmpty) {
-                        if (pretty) {
-                            sb[sbPos++] = ' ';
-                        }
-                        sb[sbPos++] = '}';
-                        return;
+                }
+                sbPos += this.GetLength;
+            }
+            else if (this.IsObject) {
+                int x;
+                int y;
+                if (pretty && !AsValue) {
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
                     }
+                }
 
-                    Enumerator enumerator = this.GetEnumerator();
+                sb[sbPos++] = '{';
+                if (this.IsEmpty) {
                     if (pretty) {
-                        indent++;
-                        sb[sbPos++] = '\n';
-
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            JsonSpan current = enumerator.Current;
-                            EnsureBufferCapacity(sbPos + (INDENT_LEN * indent) + current.GetKeyLen + 4, ref sb);
-                            for (y = indent; --y >= 0;) {
-                                indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                sbPos += INDENT_LEN;
-                            }
-                            sb[sbPos++] = '"';
-                            current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
-                            sbPos += current.GetKeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
-                            current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 2, ref sb);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                sb[sbPos++] = ',';
-                                sb[sbPos++] = '\n';
-                            }
-                            else {
-                                sb[sbPos++] = '\n';
-                            }
-                        } while (moved);
-
-                        indent--;
-                        for (x = indent; --x >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
-                        }
+                        sb[sbPos++] = ' ';
                     }
-                    else {
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            JsonSpan current = enumerator.Current;
-                            EnsureBufferCapacity(sbPos + current.GetKeyLen + 4, ref sb);
-                            sb[sbPos++] = '"';
-                            current.Key.CopyTo(sb.AsSpan(sbPos, current.GetKeyLen));
-                            sbPos += current.GetKeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
-                            current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 1, ref sb);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                sb[sbPos++] = ',';
-                            }
-                        } while (moved);
-                    }
-
-                    EnsureBufferCapacity(sbPos + 1, ref sb);
                     sb[sbPos++] = '}';
                     return;
                 }
-                case JsonType.Array: {
-                    int x;
-                    int y;
-                    if (pretty && !AsValue) {
-                        EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                        for (x = indent; --x >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
+
+                this.Reset();
+                bool moved = this.MoveNext();
+                if (pretty) {
+                    indent++;
+                    sb[sbPos++] = '\n';
+
+                    do {
+                        JsonSpan current = this.Current;
+                        for (y = indent; --y >= 0;) {
+                            indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
                             sbPos += INDENT_LEN;
                         }
-                    }
-                    EnsureBufferCapacity(sbPos + 4, ref sb);
-                    sb[sbPos++] = '[';
-                    if (this.IsEmpty) {
-                        if (pretty) {
-                            sb[sbPos++] = ' ';
+                        sb[sbPos++] = '"';
+                        current.Key.CopyTo(sb.Slice(sbPos, current.GetKeyLen));
+                        sbPos += current.GetKeyLen;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
+                        current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                        moved = this.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
                         }
-                        sb[sbPos++] = ']';
-                        return;
-                    }
-
-                    Enumerator enumerator = this.GetEnumerator();
-                    if (pretty) {
-                        indent++;
                         sb[sbPos++] = '\n';
+                    } while (moved);
 
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            JsonSpan current = enumerator.Current;
-                            if (HasFlag((long)JsonType.Value, (long)current.Type)) {
-                                EnsureBufferCapacity(sbPos + (INDENT_LEN * indent), ref sb);
-                                for (y = indent; --y >= 0;) {
-                                    indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                                    sbPos += INDENT_LEN;
-                                }
-                            }
-                            current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 2, ref sb);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                sb[sbPos++] = ',';
-                                sb[sbPos++] = '\n';
-                            }
-                            else {
-                                sb[sbPos++] = '\n';
-                            }
-                        } while (moved);
-
-                        indent--;
-                        for (x = indent; --x >= 0;) {
-                            indentSpan.CopyTo(sb.AsSpan(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
+                    indent--;
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
+                    }
+                }
+                else {
+                    do {
+                        JsonSpan current = this.Current;
+                        sb[sbPos++] = '"';
+                        current.Key.CopyTo(sb.Slice(sbPos, current.GetKeyLen));
+                        sbPos += current.GetKeyLen;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
+                        current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                        moved = this.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
                         }
-                    }
-                    else {
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            enumerator.Current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, ref sb, ref indent, ref sbPos, in indentSpan);
-                            EnsureBufferCapacity(sbPos + 1, ref sb);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                sb[sbPos++] = ',';
-                            }
-                        } while (moved);
-                    }
+                    } while (moved);
+                }
 
-                    EnsureBufferCapacity(sbPos + 1, ref sb);
+                sb[sbPos++] = '}';
+            }
+            else if (this.IsArray) {
+                int x;
+                int y;
+                if (pretty && !AsValue) {
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
+                    }
+                }
+                sb[sbPos++] = '[';
+                if (this.IsEmpty) {
+                    if (pretty) {
+                        sb[sbPos++] = ' ';
+                    }
                     sb[sbPos++] = ']';
                     return;
                 }
+
+                this.Reset();
+                bool moved = this.MoveNext();
+                if (pretty) {
+                    indent++;
+                    sb[sbPos++] = '\n';
+
+                    do {
+                        JsonSpan current = this.Current;
+                        if (current.IsValue) {
+                            for (y = indent; --y >= 0;) {
+                                indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                                sbPos += INDENT_LEN;
+                            }
+                        }
+                        current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                        moved = this.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
+                        }
+                        sb[sbPos++] = '\n';
+                    } while (moved);
+
+                    indent--;
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
+                    }
+                }
+                else {
+                    do {
+                        this.Current.ProcessString(false, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                        moved = this.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
+                        }
+                    } while (moved);
+                }
+
+                sb[sbPos++] = ']';
             }
         }
 
@@ -1026,7 +836,7 @@ namespace ScoredProductions.NanoJson {
             get
             {
                 double returnNumber = double.NaN;
-                if (HasFlag((long)this.Type, (long)JsonType.Number)) {
+                if (this.IsNumber) {
                     returnNumber = ParseNumber(this.Value);
                 }
                 return returnNumber;
@@ -1056,21 +866,23 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetNumber(string key, out double @out) => this.TryGetNumber(key.AsSpan(), out @out);
+        public bool TryGetNumber(string key, out double @out) => this.TryGetNumber(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly double TryGetNumber(in ReadOnlySpan<char> key) => this.TryGetNumber(in key, out double value) ? value : double.NaN;
+        public double TryGetNumber(in ReadOnlySpan<char> key) {
+            return this.TryGetNumber(in key, out double value) ? value : double.NaN;
+        }
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
-            if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.Object, (long)value.Type)) {
+        public bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
+            if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 return double.TryParse(value.Value, out @out);
             }
             else {
@@ -1092,7 +904,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+        public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             return this.TryGetNumber(key.AsSpan(), out @out);
         }
 
@@ -1101,7 +913,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+        public T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             this.TryGetNumber(in key, out T value);
             return value;
         }
@@ -1110,8 +922,8 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.Number, (long)value.Type)) {
+        public bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
+            if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 @out = value.GetNumberOfType<T>();
                 return true;
             }
@@ -1131,21 +943,25 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetBool(string key) => this.TryGetKey(key, out JsonSpan value) && value.GetBool;
+        public bool TryGetBool(string key) {
+            return this.TryGetKey(key, out JsonSpan value) && value.GetBool;
+        }
 
         /// <summary>
         /// Try to get the bool value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
+        public bool TryGetBool(string key, out bool @out) => this.TryGetBool(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the bool value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonSpan value) ? (@out = HasFlag((long)JsonType.Boolean, (long)value.Type) && value.GetBool) : (@out = false);
+        public bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) {
+            return this.TryGetKey(in key, out JsonSpan value) ? (@out = value.IsBool && value.GetBool) : (@out = false);
+        }
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
@@ -1155,7 +971,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
-        public readonly DateTime AsDateTime => JsonType.DateTime.HasFlag(this.Type) && DateTime.TryParse(this.Value, out DateTime value) ? value : DateTime.MinValue;
+        public readonly DateTime AsDateTime => HasFlag((long)this.Type, (long)JsonType.DateTime) && DateTime.TryParse(this.Value, out DateTime value) ? value : DateTime.MinValue;
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
@@ -1165,12 +981,12 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
-        public readonly bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(@key.AsSpan(), out @out);
+        public bool TryGetDateTime(string key, out DateTime @out) => this.TryGetDateTime(@key.AsSpan(), out @out);
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
-        public readonly bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
+        public bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
             if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.DateTime, (long)this.Type)) {
                 @out = value.GetDateTime;
                 return true;
@@ -1181,37 +997,31 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        /// <summary>
-        /// Get if This object is Null
-        /// </summary>
-        public readonly bool IsNull => this.Type == JsonType.Null;
-
     }
 
     #endregion
 
     #region ### JsonMemory ###
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public readonly struct JsonMemory : IEquatable<JsonMemory>, IComparable<JsonMemory>, IDisposable {
 
-        private readonly ReadOnlyMemory<char> ReferenceData;
-        private readonly ReadOnlyMemory<char> KeyData;
-        public readonly JsonType Type;
-        private readonly IEnumerable<JsonMemory> InnerValues;
         /// <summary>
         /// Gets the length of the contained values for Array or Object
         /// </summary>
-        public readonly int InnerLength;
-
+        public readonly int ContainerLength;
+        public readonly JsonType Type;
+        private readonly ReadOnlyMemory<char> Value;
+        private readonly ReadOnlyMemory<char> Key;
+        private readonly JsonMemory[] ContainedValues;
 
         private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> reference, ref JsonReader reader, ref JsonMemory[] existingBuffer, int bufferIndex) {
             if (reference.IsEmpty) {
                 this = Empty;
-                this.KeyData = key;
+                this.Key = key;
                 return;
             }
-            this.KeyData = key;
+            this.Key = key;
             ushort first;
             if (reader.CurrentIndex < 0 || IsWhiteSpace(reader.CurrentValue)) {
                 first = reader.AdvanceToNotWhiteSpace();
@@ -1222,26 +1032,26 @@ namespace ScoredProductions.NanoJson {
             switch (first) {
                 case QUOTE: {
                     this.Type = JsonType.String;
-                    this.InnerValues = Array.Empty<JsonMemory>();
+                    this.ContainedValues = Array.Empty<JsonMemory>();
                     int left = reader.CurrentIndex + 1;
                     int right = reader.AdvanceTo(QUOTE);
 
                     if ((right ^ left) == 0) {
-                        this.ReferenceData = ReadOnlyMemory<char>.Empty;
+                        this.Value = ReadOnlyMemory<char>.Empty;
                     }
                     else {
-                        this.ReferenceData = reference.Slice(left, right - left);
+                        this.Value = reference.Slice(left, right - left);
                     }
-                    this.InnerLength = 0;
+                    this.ContainerLength = 0;
                     return;
                 }
                 case LBRACKET: {
-                    this.Type = JsonType.Array;
+                    this.Type = JsonType.Array | JsonType.Disposable;
                     int left = reader.CurrentIndex;
                     if (reader.AdvanceToNotWhiteSpace() == RBRACKET) {
-                        this.InnerValues = Array.Empty<JsonMemory>();
-                        this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
-                        this.InnerLength = 0;
+                        this.ContainedValues = Array.Empty<JsonMemory>();
+                        this.Value = reference.Slice(left, reader.CurrentIndex - left + 1);
+                        this.ContainerLength = 0;
                         return;
                     }
                     int refStart = left;
@@ -1373,23 +1183,22 @@ namespace ScoredProductions.NanoJson {
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                     ReadComplete:
                     int valuesLen = bufPos - bufferIndex;
-                    this.InnerLength = valuesLen;
-                    JsonContainerPool.RentedContainer rented = new JsonContainerPool.RentedContainer(valuesLen);
-                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(rented.Value.AsSpan());
-                    this.InnerValues = rented;
+                    this.ContainerLength = valuesLen;
+                    this.ContainedValues = JsonContainerPool.Rent(valuesLen);
+                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.ContainedValues.AsSpan());
                     if (bufferSource) {
                         JsonContainerPool.Return(existingBuffer);
                     }
-                    this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
+                    this.Value = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
                     return;
                 }
                 case LBRACE: {
-                    this.Type = JsonType.Object;
+                    this.Type = JsonType.Object | JsonType.Disposable;
                     int left = reader.CurrentIndex;
                     if (reader.AdvanceToNotWhiteSpace() == RBRACE) {
-                        this.InnerValues = Array.Empty<JsonMemory>();
-                        this.ReferenceData = reference.Slice(left, reader.CurrentIndex - left + 1);
-                        this.InnerLength = 0;
+                        this.ContainedValues = Array.Empty<JsonMemory>();
+                        this.Value = reference.Slice(left, reader.CurrentIndex - left + 1);
+                        this.ContainerLength = 0;
                         return;
                     }
                     int refStart = left;
@@ -1534,26 +1343,25 @@ namespace ScoredProductions.NanoJson {
 
                     ReadComplete:
                     int valuesLen = bufPos - bufferIndex;
-                    this.InnerLength = valuesLen;
-                    JsonContainerPool.RentedContainer rented = new JsonContainerPool.RentedContainer(valuesLen);
-                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(rented.Value.AsSpan());
-                    this.InnerValues = rented;
+                    this.ContainerLength = valuesLen;
+                    this.ContainedValues = JsonContainerPool.Rent(valuesLen);
+                    existingBuffer.AsSpan(bufferIndex, valuesLen).CopyTo(this.ContainedValues.AsSpan());
                     if (bufferSource) {
                         JsonContainerPool.Return(existingBuffer);
                     }
-                    this.ReferenceData = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
+                    this.Value = reference.Slice(refStart, reader.CurrentIndex - refStart + 1);
                     return;
                 }
                 case N_LOWER:
                 case N_UPPER: {
-                    this.InnerLength = 0;
+                    this.ContainerLength = 0;
                     this.Type = JsonType.Null;
-                    this.InnerValues = Array.Empty<JsonMemory>();
-                    this.ReferenceData = NULL.AsMemory();
+                    this.ContainedValues = Array.Empty<JsonMemory>();
+                    this.Value = NULL.AsMemory();
 
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
                     if (right == 4) {
                         ReadOnlySpan<ushort> data = reader.Slice(left, right);
                         ushort c = data[1];
@@ -1571,14 +1379,14 @@ namespace ScoredProductions.NanoJson {
                 }
                 case T_LOWER:
                 case T_UPPER: {
-                    this.InnerLength = 0;
+                    this.ContainerLength = 0;
                     this.Type = JsonType.Boolean;
-                    this.InnerValues = Array.Empty<JsonMemory>();
-                    this.ReferenceData = bool.TrueString.AsMemory();
+                    this.ContainedValues = Array.Empty<JsonMemory>();
+                    this.Value = bool.TrueString.AsMemory();
 
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
                     if (right == 4) {
                         ReadOnlySpan<ushort> data = reader.Slice(left, right);
                         ushort c = data[1];
@@ -1596,14 +1404,14 @@ namespace ScoredProductions.NanoJson {
                 }
                 case F_LOWER:
                 case F_UPPER: {
-                    this.InnerLength = 0;
+                    this.ContainerLength = 0;
                     this.Type = JsonType.Boolean;
-                    this.InnerValues = Array.Empty<JsonMemory>();
-                    this.ReferenceData = bool.FalseString.AsMemory();
+                    this.ContainedValues = Array.Empty<JsonMemory>();
+                    this.Value = bool.FalseString.AsMemory();
 
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex - left;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
                     if (right == 5) {
                         ReadOnlySpan<ushort> data = reader.Slice(left, right);
                         ushort c = data[1];
@@ -1623,15 +1431,15 @@ namespace ScoredProductions.NanoJson {
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
                 }
                 default: {
-                    this.InnerLength = 0;
+                    this.ContainerLength = 0;
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
-                    int right = reader.CurrentIndex;
+                    int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
                     this.Type = JsonType.Number;
-                    this.InnerValues = Array.Empty<JsonMemory>();
+                    this.ContainedValues = Array.Empty<JsonMemory>();
 
-                    this.ReferenceData = reference.Slice(left, right - left);
-                    if (IsNumber(this.ReferenceData.Span)) {
+                    this.Value = reference.Slice(left, right);
+                    if (IsNumber(this.Value.Span)) {
                         return;
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {this.GetStringLiteral}, {reader.ToString()})", nameof(reference));
@@ -1641,30 +1449,22 @@ namespace ScoredProductions.NanoJson {
             throw new ArgumentException($"Parse failed (TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
         }
 
-        private JsonMemory(in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
+        private JsonMemory(in JsonType type, bool rented, JsonMemory[] contents, int innerLength = -1) : this(ReadOnlyMemory<char>.Empty, in type, rented, contents, innerLength) { }
 
-        private JsonMemory(in ReadOnlyMemory<char> key, in JsonType type, bool rented, IEnumerable<JsonMemory> contents, int innerLength = -1) {
+        private JsonMemory(in ReadOnlyMemory<char> key, in JsonType type, bool rented, JsonMemory[] contents, int innerLength = -1) {
             switch (type) {
                 case JsonType.Array:
                 case JsonType.Object:
                     this.Type = type;
-                    this.InnerValues = contents;
+                    this.ContainedValues = contents;
                     if (innerLength >= 0) {
-                        this.InnerLength = innerLength;
+                        this.ContainerLength = innerLength;
                     }
                     else {
-                        if (contents is JsonContainerPool.RentedContainer rc) {
-                            this.InnerLength = rc.Value.Length;
-                        }
-                        else if (contents is JsonMemory[] ar) {
-                            this.InnerLength = ar.Length;
-                        }
-                        else {
-                            throw new InvalidCastException("Unsupported container type, only JsonMemory[] or JsonContainerPool.RentedContainer supported");
-                        }
+                        this.ContainerLength = this.ContainedValues.Length;
                     }
-                    this.KeyData = key;
-                    this.ReferenceData = ReadOnlyMemory<char>.Empty;
+                    this.Key = key;
+                    this.Value = ReadOnlyMemory<char>.Empty;
                     break;
                 default:
                     throw new NotSupportedException();
@@ -1672,62 +1472,62 @@ namespace ScoredProductions.NanoJson {
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, in JsonMemory value) {
-            this.KeyData = key;
+            this.Key = key;
             this.Type = value.Type;
-            this.ReferenceData = value.ReferenceData;
-            this.InnerLength = value.InnerLength;
-            if (value.InnerValues is JsonContainerPool.RentedContainer rc) { // Dispose protection for the new value
-                JsonContainerPool.RentedContainer newConatiner = new JsonContainerPool.RentedContainer(value.InnerLength);
-                rc.Value.AsSpan(0, value.InnerLength).CopyTo(newConatiner.Value.AsSpan(0, value.InnerLength));
-                this.InnerValues = newConatiner;
+            this.Value = value.Value;
+            this.ContainerLength = value.ContainerLength;
+            if (value.CanDispose) { // Dispose protection for the new value
+                JsonMemory[] newPool = JsonContainerPool.Rent(value.ContainerLength);
+                value.GetInsideValuesAsSpan.CopyTo(newPool.AsSpan());
+                this.ContainedValues = newPool;
             }
             else {
-                this.InnerValues = value.InnerValues;
+                this.ContainedValues = value.ContainedValues;
             }
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, bool value) {
-            this.KeyData = key;
+            this.Key = key;
             this.Type = JsonType.Boolean;
-            this.ReferenceData = value ? bool.TrueString.AsMemory() : bool.FalseString.AsMemory();
-            this.InnerValues = Array.Empty<JsonMemory>();
-            this.InnerLength = 0;
+            this.Value = value ? bool.TrueString.AsMemory() : bool.FalseString.AsMemory();
+            this.ContainedValues = Array.Empty<JsonMemory>();
+            this.ContainerLength = 0;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, double value) {
-            this.KeyData = key;
+            this.Key = key;
             this.Type = JsonType.Number;
-            this.ReferenceData = value.ToString().AsMemory();
-            this.InnerValues = Array.Empty<JsonMemory>();
-            this.InnerLength = 0;
+            this.Value = value.ToString().AsMemory();
+            this.ContainedValues = Array.Empty<JsonMemory>();
+            this.ContainerLength = 0;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key) {
-            this.KeyData = key;
+            this.Key = key;
             this.Type = JsonType.Null;
-            this.ReferenceData = NULL.AsMemory();
-            this.InnerValues = Array.Empty<JsonMemory>();
-            this.InnerLength = 0;
+            this.Value = NULL.AsMemory();
+            this.ContainedValues = Array.Empty<JsonMemory>();
+            this.ContainerLength = 0;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, in string value) : this(key, value.AsMemory()) { }
         private JsonMemory(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> value) {
-            this.KeyData = key;
+            this.Key = key;
             this.Type = JsonType.String;
-            this.ReferenceData = value;
-            this.InnerValues = Array.Empty<JsonMemory>();
-            this.InnerLength = 0;
+            this.Value = value;
+            this.ContainedValues = Array.Empty<JsonMemory>();
+            this.ContainerLength = 0;
         }
 
         private JsonMemory(in ReadOnlyMemory<char> key, JsonType overridingType, in ReadOnlyMemory<char> value) {
             if (HasFlag((long)JsonType.Container, (long)overridingType)) {
                 throw new ArgumentException("A container cannot be set with this override", nameof(overridingType));
             }
-            this.KeyData = key;
+            this.Key = key;
             this.Type = overridingType;
-            this.ReferenceData = value;
-            this.InnerValues = Array.Empty<JsonMemory>();
-            this.InnerLength = 0;
+            this.Value = value;
+            this.ContainedValues = Array.Empty<JsonMemory>();
+            this.ContainerLength = 0;
         }
 
         /// <summary>
@@ -1740,25 +1540,33 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="includingSubObjects">If this object will dispose everything or just itself</param>
         public void Dispose(bool includingSubObjects = true) {
-            if (includingSubObjects && this.InnerLength > 0) {
+            if (includingSubObjects && this.ContainerLength > 0) {
                 CycleDisposeEach(in this);
             }
-            if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
-                rc.Dispose();
+            if (this.CanDispose) {
+                JsonContainerPool.Return(this.ContainedValues);
             }
         }
 
         private static void CycleDisposeEach(in JsonMemory container) {
-            for (int x = 0; x < container.InnerLength; x++) {
-                ref readonly JsonMemory next = ref container[x];
-                next.Dispose(true);
+            for (int x = 0; x < container.ContainerLength; x++) {
+                container[x].Dispose(true);
             }
         }
 
         /// <summary>
         /// If this was created using rented space, making it eligible within using or calling dispose to save memory
         /// </summary>
-        public readonly bool CanDispose => this.InnerValues is JsonContainerPool.RentedContainer;
+        public readonly bool CanDispose => HasFlag((long)this.Type, (long)JsonType.Disposable);
+
+        public readonly bool IsString => HasFlag((long)this.Type, (long)JsonType.String);
+        public readonly bool IsBool => HasFlag((long)this.Type, (long)JsonType.Boolean);
+        public readonly bool IsNumber => HasFlag((long)this.Type, (long)JsonType.Number);
+        public readonly bool IsNull => HasFlag((long)this.Type, (long)JsonType.Null);
+        public readonly bool IsArray => HasFlag((long)this.Type, (long)JsonType.Array);
+        public readonly bool IsObject => HasFlag((long)this.Type, (long)JsonType.Object);
+        public readonly bool IsValue => this.IsString || this.IsBool || this.IsNumber || this.IsNull;
+        public readonly bool IsContainer => this.IsArray || this.IsObject;
 
         /// <summary>
         /// Searchs the values for matching Key. Keys including '.' will start searching inside of subsiquent objects to find desired Key.
@@ -1780,10 +1588,10 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                if (this.Type == JsonType.Object) {
+                if (this.IsObject) {
                     int hash = ComputeHash(in key, out int pathLen);
-                    for (int x = this.InnerLength; --x >= 0;) {
-                        ref readonly JsonMemory value = ref this.GetInsideValues[x];
+                    for (int x = this.ContainerLength; --x >= 0;) {
+                        ref readonly JsonMemory value = ref this.GetInsideValuesAsSpan[x];
                         if (hash == value.KeyHash) {
                             return ref value;
                         }
@@ -1810,135 +1618,133 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                switch (this.Type) {
-                    case JsonType.Object:
-                    case JsonType.Array:
-                        return ref this.GetInsideValues[index];
-                    default:
-                        throw new IndexOutOfRangeException();
+                if (this.IsContainer) {
+                    return ref this.GetInsideValuesAsSpan[index];
                 }
+                throw new IndexOutOfRangeException();
             }
         }
 
-        private readonly int KeyHash => ComputeHash(this.KeyData.Span, out _);
+        private readonly int KeyHash => ComputeHash(this.Key.Span, out _);
         private readonly int KeyLen => this.GetKeyAsSpan.Length;
 
         public readonly override string ToString() => this.ToString(Default_ToStringFormat);
 
         private readonly int GetSerializedLength(bool asValue, bool pretty, bool translateUnicode, bool lowerCaseBool, bool reparseNumbers, int indent = 0) {
-            switch (this.Type) {
-                case JsonType.String:
-                    return (translateUnicode ? this.GetTranslatedUnicodeLength : this.GetLength) + 2;
-                case JsonType.Null:
-                    return 4;
-                case JsonType.Number:
-                    return reparseNumbers ? this.GetNumberString.Length : this.GetLength;
-                case JsonType.Boolean:
-                    return this.GetLength;
-                case JsonType.Object: {
-                    int length = 0;
-                    if (pretty && !asValue) {
-                        length += indent * INDENT_LEN;
-                    }
+            if (this.IsString) {
+                return (translateUnicode ? this.GetTranslatedUnicodeLength : this.GetLength) + 2;
+            }
+            else if (this.IsNull) {
+                return 4;
+            }
+            else if (this.IsNumber) {
+                return reparseNumbers ? this.GetNumberString.Length : this.GetLength;
+            }
+            else if (this.IsBool) {
+                return this.GetLength;
+            }
+            else if (this.IsObject) {
+                int length = 0;
+                if (pretty && !asValue) {
+                    length += indent * INDENT_LEN;
+                }
 
-                    length++; // '{'
-                    if (this.InnerLength == 0) {
-                        if (pretty) {
-                            length++; // ' '
-                        }
-                        length++; // '}'
-                        return length;
-                    }
-
-                    ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
+                length++; // '{'
+                if (this.ContainerLength == 0) {
                     if (pretty) {
-                        length++; // '\n'
-                        int childIndent = indent + 1;
-
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            ref readonly JsonMemory value = ref enumerator.Current;
-                            length += value.KeyLen + 4 + (childIndent * INDENT_LEN) + value.GetSerializedLength(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, childIndent);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                length += 2;
-                            }
-                            else {
-                                length++;
-                            }
-                        } while (moved);
-
-                        length += indent * INDENT_LEN; // closing indentation
+                        length++; // ' '
                     }
-                    else {
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            ref readonly JsonMemory value = ref enumerator.Current;
-                            length += value.KeyLen + 4 + value.GetSerializedLength(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, indent);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                length++;
-                            }
-                        } while (moved);
-                    }
-
                     length++; // '}'
                     return length;
                 }
-                case JsonType.Array: {
-                    int length = 0;
-                    if (pretty && !asValue) {
-                        length += indent * INDENT_LEN;
-                    }
 
-                    length++; // '['
-                    if (this.InnerLength == 0) {
-                        if (pretty) {
-                            length++; // ' '
+                ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
+                bool moved = enumerator.MoveNext();
+                if (pretty) {
+                    length++; // '\n'
+                    int childIndent = indent + 1;
+
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        length += value.KeyLen + 4 + (childIndent * INDENT_LEN) + value.GetSerializedLength(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, childIndent);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            length += 2;
                         }
-                        length++; // ']'
-                        return length;
-                    }
+                        else {
+                            length++;
+                        }
+                    } while (moved);
 
-                    ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
+                    length += indent * INDENT_LEN; // closing indentation
+                }
+                else {
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        length += value.KeyLen + 4 + value.GetSerializedLength(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, indent);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            length++;
+                        }
+                    } while (moved);
+                }
+
+                length++; // '}'
+                return length;
+            }
+            else if (this.IsArray) {
+                int length = 0;
+                if (pretty && !asValue) {
+                    length += indent * INDENT_LEN;
+                }
+
+                length++; // '['
+                if (this.ContainerLength == 0) {
                     if (pretty) {
-                        length++; // '\n'
-                        int childIndent = indent + 1;
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            ref readonly JsonMemory value = ref enumerator.Current;
-                            if (HasFlag((long)JsonType.Value, (long)value.Type)) {
-                                length += childIndent * INDENT_LEN;
-                            }
-                            length += value.GetSerializedLength(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, childIndent);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                length += 2;
-                            }
-                            else {
-                                length++;
-                            }
-                        } while (moved);
-
-                        length += indent * INDENT_LEN; // closing indentation
+                        length++; // ' '
                     }
-                    else {
-                        bool moved = enumerator.MoveNext();
-                        do {
-                            ref readonly JsonMemory value = ref enumerator.Current;
-                            length += value.GetSerializedLength(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, indent);
-                            moved = enumerator.MoveNext();
-                            if (moved) {
-                                length++; // ','
-                            }
-                        } while (moved);
-                    }
-
                     length++; // ']'
                     return length;
                 }
-                default:
-                    return 0;
+
+                ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
+                bool moved = enumerator.MoveNext();
+                if (pretty) {
+                    length++; // '\n'
+                    int childIndent = indent + 1;
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        if (value.IsValue) {
+                            length += childIndent * INDENT_LEN;
+                        }
+                        length += value.GetSerializedLength(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, childIndent);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            length += 2;
+                        }
+                        else {
+                            length++;
+                        }
+                    } while (moved);
+
+                    length += indent * INDENT_LEN; // closing indentation
+                }
+                else {
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        length += value.GetSerializedLength(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, indent);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            length++; // ','
+                        }
+                    } while (moved);
+                }
+
+                length++; // ']'
+                return length;
+            }
+            else {
+                return 0;
             }
         }
 
@@ -1948,35 +1754,37 @@ namespace ScoredProductions.NanoJson {
             bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
 
-            switch (this.Type) {
-                case JsonType.String:
-                    if (translateUnicode) {
-                        return this.GetStringDecoded;
-                    }
-                    else {
-                        return this.GetStringLiteral;
-                    }
-                case JsonType.Null:
-                    if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
-                        return null;
-                    }
-                    else {
-                        return NULL;
-                    }
-                case JsonType.Number:
-                    if (reparseNumbers) {
-                        return this.GetNumberString;
-                    }
-                    else {
-                        return this.GetStringLiteral;
-                    }
-                case JsonType.Boolean:
-                    if (MemoryMarshal.GetReference(this.ReferenceData.Span) == 'T') {
-                        return lowerCaseBool ? TRUE_l : TRUE_u;
-                    }
-                    else {
-                        return lowerCaseBool ? FALSE_l : FALSE_u;
-                    }
+            if (this.IsString) {
+                if (translateUnicode) {
+                    return this.GetStringDecoded;
+                }
+                else {
+                    return this.GetStringLiteral;
+                }
+            }
+            else if (this.IsNull) {
+                if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                    return null;
+                }
+                else {
+                    return NULL;
+                }
+            }
+            else if (this.IsNumber) {
+                if (reparseNumbers) {
+                    return this.GetNumberString;
+                }
+                else {
+                    return this.GetStringLiteral;
+                }
+            }
+            else if (this.IsBool) {
+                if (MemoryMarshal.GetReference(this.Value.Span) == 'T') {
+                    return lowerCaseBool ? TRUE_l : TRUE_u;
+                }
+                else {
+                    return lowerCaseBool ? FALSE_l : FALSE_u;
+                }
             }
             int exactCapacity = Math.Max(1, this.GetSerializedLength(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers));
             return string.Create(exactCapacity, (this, pretty, translateUnicode, lowerCaseBool, reparseNumbers, INDENT_TABS), (span, state) => {
@@ -1990,80 +1798,140 @@ namespace ScoredProductions.NanoJson {
         /// Recursive method to build the json ToString output
         /// </summary>
         private readonly void ProcessString(bool AsValue, bool pretty, bool translateUnicode, bool lowerCaseBool, bool reparseNumbers, in Span<char> sb, ref int indent, ref int sbPos, in ReadOnlySpan<char> indentSpan) {
-            switch (this.Type) {
-                case JsonType.String: {
-                    sb[sbPos++] = '"';
-                    if (translateUnicode) {
-                        TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb, ref sbPos);
-                    }
-                    else {
-                        ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
-                        refSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
-                        sbPos += this.GetLength;
-                    }
-                    sb[sbPos++] = '"';
-                    return;
+            if (this.IsString) {
+                sb[sbPos++] = '"';
+                if (translateUnicode) {
+                    TranslateUnicodeIntoBufferFromSpan(this.GetValueAsSpan, sb, ref sbPos);
                 }
-                case JsonType.Null: {
-                    this.GetValueAsSpan.CopyTo(sb.Slice(sbPos, 4));
-                    sbPos += 4;
-                    return;
-                }
-                case JsonType.Number: {
-                    if (reparseNumbers) {
-                        this.GetNumber.TryFormat(sb.Slice(sbPos), out int refSpanLen);
-                        sbPos += refSpanLen;
-                    }
-                    else {
-                        this.GetValueAsSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
-                        sbPos += this.GetLength;
-                    }
-                    return;
-                }
-                case JsonType.Boolean: {
+                else {
                     ReadOnlySpan<char> refSpan = this.GetValueAsSpan;
-                    int len = this.GetLength;
-                    if (lowerCaseBool) {
-                        // write lowercase first char
-                        ref char first = ref MemoryMarshal.GetReference(refSpan);
-                        if (first == 'T') {
-                            sb[sbPos++] = 't';
-                        }
-                        else if (first == 'F') {
-                            sb[sbPos++] = 'f';
-                        }
-                        else {
-                            sb[sbPos++] = first;
-                        }
-                        refSpan.Slice(1).CopyTo(sb.Slice(sbPos, --len));
-                        sbPos += len;
+                    refSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
+                    sbPos += this.GetLength;
+                }
+                sb[sbPos++] = '"';
+                return;
+            }
+            else if (this.IsNull) {
+                this.GetValueAsSpan.CopyTo(sb.Slice(sbPos, 4));
+                sbPos += 4;
+                return;
+            }
+            else if (this.IsNumber) {
+                if (reparseNumbers) {
+                    this.GetNumber.TryFormat(sb.Slice(sbPos), out int refSpanLen);
+                    sbPos += refSpanLen;
+                }
+                else {
+                    this.GetValueAsSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
+                    sbPos += this.GetLength;
+                }
+                return;
+            }
+            else if (this.IsBool) {
+                this.GetValueAsSpan.CopyTo(sb.Slice(sbPos, this.GetLength));
+                if (lowerCaseBool) {
+                    switch (MemoryMarshal.GetReference(this.GetValueAsSpan)) {
+                        case 'F':
+                            sb[sbPos] = 'f';
+                            break;
+                        case 'T':
+                            sb[sbPos] = 't';
+                            break;
                     }
-                    else {
-                        refSpan.CopyTo(sb.Slice(sbPos, len));
-                        sbPos += len;
+                }
+                sbPos += this.GetLength;
+            }
+            else if (this.IsObject) {
+                int x;
+                int y;
+                if (pretty && !AsValue) {
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
                     }
+                }
+
+                sb[sbPos++] = '{';
+
+                if (this.ContainerLength == 0) {
+                    if (pretty) {
+                        sb[sbPos++] = ' ';
+                    }
+                    sb[sbPos++] = '}';
                     return;
                 }
-                case JsonType.Object: {
-                    int x;
-                    int y;
-                    if (pretty && !AsValue) {
-                        for (x = indent; --x >= 0;) {
+
+                ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
+                if (pretty) {
+                    indent++;
+                    sb[sbPos++] = '\n';
+
+                    bool moved = enumerator.MoveNext();
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        for (y = indent; --y >= 0;) {
                             indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
                             sbPos += INDENT_LEN;
                         }
-                    }
-
-                    sb[sbPos++] = '{';
-
-                    if (this.InnerLength == 0) {
-                        if (pretty) {
-                            sb[sbPos++] = ' ';
+                        sb[sbPos++] = '"';
+                        value.GetKeyAsSpan.CopyTo(sb.Slice(sbPos, value.KeyLen));
+                        sbPos += value.KeyLen;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
+                        value.ProcessString(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, sb, ref indent, ref sbPos, in indentSpan);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
                         }
-                        sb[sbPos++] = '}';
-                        return;
-                    }
+                        sb[sbPos++] = '\n';
+                    } while (moved);
 
+                    indent--;
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
+                    }
+                }
+                else {
+                    bool moved = enumerator.MoveNext();
+                    do {
+                        ref readonly JsonMemory value = ref enumerator.Current;
+                        sb[sbPos++] = '"';
+                        value.GetKeyAsSpan.CopyTo(sb.Slice(sbPos, value.KeyLen));
+                        sbPos += value.KeyLen;
+                        sb[sbPos++] = '"';
+                        sb[sbPos++] = ':';
+                        sb[sbPos++] = ' ';
+                        value.ProcessString(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                        moved = enumerator.MoveNext();
+                        if (moved) {
+                            sb[sbPos++] = ',';
+                        }
+                    } while (moved);
+                }
+
+                sb[sbPos++] = '}';
+                return;
+            }
+            else if (this.IsArray) {
+                int x;
+                int y;
+                if (pretty && !AsValue) {
+                    for (x = indent; --x >= 0;) {
+                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                        sbPos += INDENT_LEN;
+                    }
+                }
+                sb[sbPos++] = '[';
+
+                if (this.ContainerLength == 0) {
+                    if (pretty) {
+                        sb[sbPos++] = ' ';
+                    }
+                    sb[sbPos++] = ']';
+                }
+                else {
                     ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
                     if (pretty) {
                         indent++;
@@ -2072,17 +1940,13 @@ namespace ScoredProductions.NanoJson {
                         bool moved = enumerator.MoveNext();
                         do {
                             ref readonly JsonMemory value = ref enumerator.Current;
-                            for (y = indent; --y >= 0;) {
-                                indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
-                                sbPos += INDENT_LEN;
+                            if (value.IsValue) {
+                                for (y = indent; --y >= 0;) {
+                                    indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
+                                    sbPos += INDENT_LEN;
+                                }
                             }
-                            sb[sbPos++] = '"';
-                            value.GetKeyAsSpan.CopyTo(sb.Slice(sbPos, value.KeyLen));
-                            sbPos += value.KeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
-                            value.ProcessString(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, sb, ref indent, ref sbPos, in indentSpan);
+                            value.ProcessString(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
                             moved = enumerator.MoveNext();
                             if (moved) {
                                 sb[sbPos++] = ',';
@@ -2097,17 +1961,10 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
                     else {
-
                         bool moved = enumerator.MoveNext();
                         do {
                             ref readonly JsonMemory value = ref enumerator.Current;
-                            sb[sbPos++] = '"';
-                            value.GetKeyAsSpan.CopyTo(sb.Slice(sbPos, value.KeyLen));
-                            sbPos += value.KeyLen;
-                            sb[sbPos++] = '"';
-                            sb[sbPos++] = ':';
-                            sb[sbPos++] = ' ';
-                            value.ProcessString(true, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
+                            value.ProcessString(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
                             moved = enumerator.MoveNext();
                             if (moved) {
                                 sb[sbPos++] = ',';
@@ -2115,71 +1972,9 @@ namespace ScoredProductions.NanoJson {
                         } while (moved);
                     }
 
-                    sb[sbPos++] = '}';
-                    return;
+                    sb[sbPos++] = ']';
                 }
-                case JsonType.Array: {
-                    int x;
-                    int y;
-                    if (pretty && !AsValue) {
-                        for (x = indent; --x >= 0;) {
-                            indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
-                            sbPos += INDENT_LEN;
-                        }
-                    }
-                    sb[sbPos++] = '[';
-
-                    if (this.InnerLength == 0) {
-                        if (pretty) {
-                            sb[sbPos++] = ' ';
-                        }
-                        sb[sbPos++] = ']';
-                    }
-                    else {
-                        ReadOnlySpan<JsonMemory>.Enumerator enumerator = this.GetEnumerator();
-                        if (pretty) {
-                            indent++;
-                            sb[sbPos++] = '\n';
-
-                            bool moved = enumerator.MoveNext();
-                            do {
-                                ref readonly JsonMemory value = ref enumerator.Current;
-                                if (HasFlag((long)JsonType.Value, (long)value.Type)) {
-                                    for (y = indent; --y >= 0;) {
-                                        indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
-                                        sbPos += INDENT_LEN;
-                                    }
-                                }
-                                value.ProcessString(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
-                                moved = enumerator.MoveNext();
-                                if (moved) {
-                                    sb[sbPos++] = ',';
-                                }
-                                sb[sbPos++] = '\n';
-                            } while (moved);
-
-                            indent--;
-                            for (x = indent; --x >= 0;) {
-                                indentSpan.CopyTo(sb.Slice(sbPos, INDENT_LEN));
-                                sbPos += INDENT_LEN;
-                            }
-                        }
-                        else {
-                            bool moved = enumerator.MoveNext();
-                            do {
-                                ref readonly JsonMemory value = ref enumerator.Current;
-                                value.ProcessString(false, pretty, translateUnicode, lowerCaseBool, reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
-                                moved = enumerator.MoveNext();
-                                if (moved) {
-                                    sb[sbPos++] = ',';
-                                }
-                            } while (moved);
-                        }
-
-                        sb[sbPos++] = ']';
-                    }
-                    return;
-                }
+                return;
             }
         }
 
@@ -2190,15 +1985,15 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                if (this.ReferenceData.IsEmpty) {
+                if (this.Value.IsEmpty) {
                     int len = 0;
-                    for (int x = this.InnerLength; --x >= 0;) {
-                        len += this.GetInsideValues[x].GetLength;
+                    for (int x = this.ContainerLength; --x >= 0;) {
+                        len += this.GetInsideValuesAsSpan[x].GetLength;
                     }
                     return len;
                 }
                 else {
-                    return this.ReferenceData.Length;
+                    return this.Value.Length;
                 }
             }
         }
@@ -2206,7 +2001,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the literal string value of the object
         /// </summary>
-        public readonly string GetStringLiteral => this.ReferenceData.ToString();
+        public readonly string GetStringLiteral => this.Value.ToString();
 
         public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
 
@@ -2253,17 +2048,12 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the data used inside This object
         /// </summary>
-        public readonly string GetValue => this.Type switch { JsonType.Object => this.ToString(), JsonType.Array => this.ToString(), _ => this.GetStringLiteral };
+        public readonly ReadOnlySpan<char> GetValueAsSpan => this.Value.Span;
 
         /// <summary>
         /// Get the data used inside This object
         /// </summary>
-        public readonly ReadOnlySpan<char> GetValueAsSpan => this.ReferenceData.Span;
-
-        /// <summary>
-        /// Get the data used inside This object
-        /// </summary>
-        public readonly ReadOnlyMemory<char> GetValueAsMemory => this.ReferenceData;
+        public readonly ReadOnlyMemory<char> GetValueAsMemory => this.Value;
 
         /// <summary>
         /// Get the number contained inside This object as a <c>double</c>
@@ -2273,7 +2063,7 @@ namespace ScoredProductions.NanoJson {
             get
             {
                 double returnNumber = double.NaN;
-                if (HasFlag((long)this.Type, (long)JsonType.Number)) {
+                if (this.IsNumber) {
                     returnNumber = ParseNumber(this.GetValueAsSpan);
                 }
                 return returnNumber;
@@ -2360,7 +2150,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            if (this.TryGetKey(in key, out JsonMemory value) && value.Type == JsonType.Number) {
+            if (this.TryGetKey(in key, out JsonMemory value) && value.IsNumber) {
                 @out = value.GetNumberOfType<T>();
                 return true;
             }
@@ -2377,11 +2167,11 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                if (this.InnerLength == 0) {
+                if (this.ContainerLength == 0) {
                     return Array.Empty<JsonMemory>();
                 }
                 else {
-                    return this.GetInsideValues.ToArray();
+                    return this.GetInsideValuesAsSpan.ToArray();
                 }
             }
         }
@@ -2389,26 +2179,12 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the values contained inside This object
         /// </summary>
-        public readonly ReadOnlySpan<JsonMemory> GetInsideValues
-        {
-            get
-            {
-                if (this.InnerValues is JsonContainerPool.RentedContainer rc) {
-                    return (ReadOnlySpan<JsonMemory>)rc.Value.AsSpan(0, this.InnerLength);
-                }
-                else if (this.InnerValues is JsonMemory[] ar) {
-                    return (ReadOnlySpan<JsonMemory>)ar.AsSpan(0, this.InnerLength);
-                }
-                else {
-                    throw new InvalidCastException("Unsupported container type, only JsonMemory[] or JsonContainerPool.RentedContainer supported");
-                }
-            }
-        }
+        public readonly ReadOnlySpan<JsonMemory> GetInsideValuesAsSpan => (ReadOnlySpan<JsonMemory>)this.ContainedValues.AsSpan(0, this.ContainerLength);
 
         /// <summary>
-        /// Get if This object is Null
+        /// Get the values contained inside This object
         /// </summary>
-        public readonly bool IsNull => this.Type == JsonType.Null;
+        public readonly ReadOnlyMemory<JsonMemory> GetInsideValuesAsMemory => (ReadOnlyMemory<JsonMemory>)this.ContainedValues.AsMemory(0, this.ContainerLength);
 
         /// <summary>
         /// Get the bool value of This object
@@ -2422,8 +2198,8 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                string[] array = new string[this.InnerLength];
-                for (int x = 0; x < this.InnerLength; x++) {
+                string[] array = new string[this.ContainerLength];
+                for (int x = 0; x < this.ContainerLength; x++) {
                     array[x] = this[x].GetStringDecoded;
                 }
                 return array;
@@ -2437,8 +2213,8 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
-                string[] array = new string[this.InnerLength];
-                for (int x = 0; x < this.InnerLength; x++) {
+                string[] array = new string[this.ContainerLength];
+                for (int x = 0; x < this.ContainerLength; x++) {
                     array[x] = this[x].GetStringLiteral;
                 }
                 return array;
@@ -2498,17 +2274,17 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the key of This object
         /// </summary>
-        public readonly string GetKey => this.KeyData.IsEmpty ? string.Empty : this.KeyData.ToString();
+        public readonly string GetKey => this.Key.IsEmpty ? string.Empty : this.Key.ToString();
 
         /// <summary>
         /// Get the key of This object
         /// </summary>
-        public readonly ReadOnlySpan<char> GetKeyAsSpan => this.KeyData.IsEmpty ? ReadOnlySpan<char>.Empty : this.KeyData.Span;
+        public readonly ReadOnlySpan<char> GetKeyAsSpan => this.Key.IsEmpty ? ReadOnlySpan<char>.Empty : this.Key.Span;
 
         /// <summary>
         /// Get the key of This object
         /// </summary>
-        public readonly ReadOnlyMemory<char> GetKeyAsMemory => this.KeyData.IsEmpty ? ReadOnlyMemory<char>.Empty : this.KeyData;
+        public readonly ReadOnlyMemory<char> GetKeyAsMemory => this.Key.IsEmpty ? ReadOnlyMemory<char>.Empty : this.Key;
 
         /// <summary>
         /// Compare the key of This object
@@ -2537,10 +2313,10 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns>Key Found</returns>
         public readonly bool TryGetKey(in ReadOnlySpan<char> key, out JsonMemory found) {
-            if (this.Type == JsonType.Object) {
+            if (this.IsObject) {
                 int hash = ComputeHash(in key, out int pathLen);
-                for (int x = this.InnerLength; --x >= 0;) {
-                    ref readonly JsonMemory value = ref this.GetInsideValues[x];
+                for (int x = this.ContainerLength; --x >= 0;) {
+                    ref readonly JsonMemory value = ref this.GetInsideValuesAsSpan[x];
                     if (hash == value.KeyHash) {
                         found = value;
                         return true;
@@ -2555,7 +2331,6 @@ namespace ScoredProductions.NanoJson {
                     }
                 }
             }
-
             found = Empty;
             return false;
         }
@@ -2573,10 +2348,10 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns>Key reference</returns>
         public readonly ref readonly JsonMemory TryGetKeyRef(ReadOnlySpan<char> key, out bool found) {
-            if (this.Type == JsonType.Object) {
+            if (this.IsObject) {
                 int hash = ComputeHash(in key, out int pathLen);
-                for (int x = this.InnerLength; --x >= 0;) {
-                    ref readonly JsonMemory value = ref this.GetInsideValues[x];
+                for (int x = this.ContainerLength; --x >= 0;) {
+                    ref readonly JsonMemory value = ref this.GetInsideValuesAsSpan[x];
                     if (hash == value.KeyHash) {
                         found = true;
                         return ref value;
@@ -2603,17 +2378,15 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         public readonly JsonMemory GetKeyOrEmpty(in ReadOnlySpan<char> key) => this.TryGetKey(in key, out JsonMemory found) ? found : Empty;
 
-        public readonly ReadOnlySpan<JsonMemory>.Enumerator GetEnumerator() => this.GetInsideValues.GetEnumerator();
+        public readonly ReadOnlySpan<JsonMemory>.Enumerator GetEnumerator() => this.GetInsideValuesAsSpan.GetEnumerator();
 
         public readonly override bool Equals(object obj) => obj is JsonMemory other && this.Equals(other);
         public readonly bool Equals(JsonMemory other) {
-            if (this.Type.Equals(other.Type)
-              && this.InnerValues.Equals(other.InnerValues)
+            return this.Type.Equals(other.Type)
+              && this.ContainedValues.Equals(other.ContainedValues)
               && this.KeyHash == other.KeyHash
-              && this.GetValueAsSpan.Equals(other.GetValueAsSpan, StringComparison.Ordinal)) {
-                return true;
-            }
-            return false;
+              && this.GetValueAsSpan.Equals(other.GetValueAsSpan, StringComparison.Ordinal)
+              && this.ContainerLength == other.ContainerLength;
         }
         public static bool operator ==(in JsonMemory left, in JsonMemory right) {
             return left.Equals(right);
@@ -2624,14 +2397,14 @@ namespace ScoredProductions.NanoJson {
         }
 
         public readonly override int GetHashCode() {
-            return HashCode.Combine(this.Type, this.InnerValues, this.ReferenceData, this.KeyHash);
+            return HashCode.Combine(this.Type, this.ContainedValues, this.Value, this.KeyHash, this.ContainerLength);
         }
 
         public static implicit operator JsonMemory(in JsonSpan span) {
             return Pin(in span);
         }
         public static implicit operator JsonSpan(in JsonMemory self) {
-            if (self.KeyData.IsEmpty) {
+            if (self.Key.IsEmpty) {
                 return new JsonSpan(self.GetValueAsSpan);
             }
             else {
@@ -2762,21 +2535,21 @@ namespace ScoredProductions.NanoJson {
         public static JsonMemory Pin(in JsonMemory data) {
             switch (data.Type) {
                 case JsonType.Null:
-                    if (data.KeyData.IsEmpty) {
+                    if (data.Key.IsEmpty) {
                         return Empty;
                     }
                     else {
-                        return new JsonMemory(data.KeyData.ToArray());
+                        return new JsonMemory(data.Key.ToArray());
                     }
                 case JsonType.Object:
                 case JsonType.Array: // Inner bodies need re-parsing as the originals reference the same allocated memory and we want it to point to a new area
-                    return ParseJson(data.KeyData.IsEmpty ? data.KeyData.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToArray().AsMemory());
+                    return ParseJson(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToArray().AsMemory());
                 case JsonType.String:
-                    return CreateString(data.KeyData.IsEmpty ? data.KeyData.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.ReferenceData.ToString());
+                    return CreateString(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToString());
                 case JsonType.Number:
-                    return CreateNumber(data.KeyData.IsEmpty ? data.KeyData.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, double.Parse(data.GetValueAsSpan));
+                    return CreateNumber(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, double.Parse(data.GetValueAsSpan));
                 case JsonType.Boolean:
-                    return CreateBool(data.KeyData.IsEmpty ? data.KeyData.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, bool.Parse(data.GetValueAsSpan));
+                    return CreateBool(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, bool.Parse(data.GetValueAsSpan));
                 default:
                     throw new NotSupportedException();
             }
@@ -2951,6 +2724,8 @@ namespace ScoredProductions.NanoJson {
     [StructLayout(LayoutKind.Sequential)]
     public ref struct JsonReader {
 
+        public static JsonReader Empty => new JsonReader();
+
         private static int _toStringSegmentLength = 20;
         /// <summary>
         /// Change this value to alter the output length of ToString
@@ -2969,14 +2744,14 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        private readonly ReadOnlySpan<ushort> source;
+        public int CurrentIndex { get; private set; }
 
         private readonly int endIndex;
 
+        private readonly ReadOnlySpan<ushort> source;
+
         private Vector<ushort> toCompare;
         private Span<ushort> GetToCompareSpan => MemoryMarshal.Cast<Vector<ushort>, ushort>(MemoryMarshal.CreateSpan(ref this.toCompare, 1));
-
-        public int CurrentIndex { get; private set; }
 
         public readonly ref readonly ushort CurrentValue => ref this.source[this.CurrentIndex];
         public readonly char CurrentChar => (char)this.CurrentValue;
@@ -2985,6 +2760,7 @@ namespace ScoredProductions.NanoJson {
         public readonly bool CanRetreat => this.CurrentIndex > 0;
 
         private readonly int Segment => Vector<ushort>.Count;
+        private readonly int SegmentZeroBased => this.Segment - 1;
 
         public JsonReader(in ReadOnlySpan<char> data, bool fromEnd = false) {
             this.source = MemoryMarshal.Cast<char, ushort>(data);
@@ -3014,8 +2790,13 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly ReadOnlySpan<char> SliceCast(int index, int len) {
+            return MemoryMarshal.Cast<ushort, char>(this.Slice(index, len));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Increment() {
-            if (this.CurrentIndex < this.endIndex) {
+            if (this.CanAdvance) {
                 this.CurrentIndex++;
                 return true;
             }
@@ -3026,7 +2807,7 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Decrement() {
-            if (this.CurrentIndex > 0) {
+            if (this.CanRetreat) {
                 this.CurrentIndex--;
                 return true;
             }
@@ -3074,11 +2855,14 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceTo(ushort search) {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return -1;
+            }
+            int segmentMinus = this.SegmentZeroBased;
             Vector<ushort> searchVector = new Vector<ushort>(search);
             Span<ushort> buf = this.GetToCompareSpan;
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3091,24 +2875,27 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus;
                     continue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] > 0) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] > 0) {
+                        this.CurrentIndex += x;
                         return this.CurrentIndex;
                     }
                 }
                 this.CurrentIndex += segmentMinus;
-            }
+            } while (this.Increment());
             return -1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int AdvanceToNot(ushort search) {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return -1;
+            }
+            int segmentMinus = this.SegmentZeroBased;
             Vector<ushort> searchVectors = new Vector<ushort>(search);
             Span<ushort> buf = this.GetToCompareSpan;
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3120,28 +2907,31 @@ namespace ScoredProductions.NanoJson {
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentIndex;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] == 0) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] == 0) {
+                        this.CurrentIndex += x;
                         return this.CurrentIndex;
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment());
             return -1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceTo(in ReadOnlySpan<ushort> search) {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return '\0';
+            }
+            int segmentMinus = this.SegmentZeroBased;
             int searchLen = search.Length;
             Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3150,35 +2940,38 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
-                for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
+                for (int x = 1; x < searchLen; x++) {
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[x]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] > 0) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] > 0) {
+                        this.CurrentIndex += x;
                         return this.CurrentValue;
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment());
             return '\0';
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNot(in ReadOnlySpan<ushort> search) {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return '\0';
+            }
+            int segmentMinus = this.SegmentZeroBased;
             int searchLen = search.Length;
             Span<ushort> buf = this.GetToCompareSpan;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVectors[i] = new Vector<ushort>(search[i]);
             }
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3187,30 +2980,34 @@ namespace ScoredProductions.NanoJson {
                     this.source.Slice(this.CurrentIndex, this.Segment).CopyTo(buf);
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVectors));
-                for (int i = 1; i < searchLen; i++) {
-                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[i]));
+                for (int x = 1; x < searchLen; x++) {
+                    eq = Vector.BitwiseOr(eq, Vector.Equals(this.toCompare, searchVectors[x]));
                 }
                 if (eq == Vector<ushort>.Zero) {
                     return this.CurrentValue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] == 0) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] == 0) {
+                        this.CurrentIndex += x;
                         return this.CurrentValue;
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment())
+                ;
             return '\0';
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToWhiteSpace() {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return '\0';
+            }
+            int segmentMinus = this.SegmentZeroBased;
             Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' '
             Span<ushort> buf = this.GetToCompareSpan;
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3223,24 +3020,27 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] > 0 && IsWhiteSpace(buf[i])) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] > 0 && IsWhiteSpace(buf[x])) {
+                        this.CurrentIndex += x;
                         return this.CurrentValue;
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment());
             return '\0';
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToNotWhiteSpace() {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return '\0';
+            }
+            int segmentMinus = this.SegmentZeroBased;
             Vector<ushort> searchVector = new Vector<ushort>(32); // 32 == ' '
             Span<ushort> buf = this.GetToCompareSpan;
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3253,27 +3053,30 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] > 0 && !IsWhiteSpace(buf[i])) {
-                        this.CurrentIndex += i;
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] > 0 && !IsWhiteSpace(buf[x])) {
+                        this.CurrentIndex += x;
                         return this.CurrentValue;
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment());
             return '\0';
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToValueEnding() {
-            int segmentMinus = this.Segment - 1;
+            if (!this.Increment()) {
+                return '\0';
+            }
+            int segmentMinus = this.SegmentZeroBased;
             Vector<ushort> commaVector = new Vector<ushort>(COMMA);
             Vector<ushort> rbraceVector = new Vector<ushort>(RBRACE);
             Vector<ushort> rbracketVector = new Vector<ushort>(RBRACKET);
             Vector<ushort> whitespace = new Vector<ushort>(33);
             Span<ushort> buf = this.GetToCompareSpan;
-            while (this.Increment()) {
-                if (this.CurrentIndex + this.Segment > this.endIndex) {
+            do {
+                if (this.CurrentIndex + segmentMinus > this.endIndex) {
                     buf.Clear();
                     this.source.Slice(this.CurrentIndex).CopyTo(buf);
                     segmentMinus = this.endIndex - this.CurrentIndex;
@@ -3293,17 +3096,17 @@ namespace ScoredProductions.NanoJson {
                     this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
                     continue;
                 }
-                for (int i = 0; i <= segmentMinus; i++) {
-                    if (eq[i] > 0) {
-                        ushort current = buf[i];
+                for (int x = 0; x <= segmentMinus; x++) {
+                    if (eq[x] > 0) {
+                        ushort current = buf[x];
                         if (current == COMMA || IsWhiteSpace(current) || current == RBRACE || current == RBRACKET) {
-                            this.CurrentIndex += i;
+                            this.CurrentIndex += x;
                             return this.CurrentValue;
                         }
                     }
                 }
                 this.CurrentIndex += segmentMinus; // Segments is one base so dont increment
-            }
+            } while (this.Increment());
             return '\0';
         }
 
@@ -3312,7 +3115,7 @@ namespace ScoredProductions.NanoJson {
             if (this.CurrentValue != LBRACE) {
                 this.AdvanceTo(LBRACE);
             }
-            int segmentMinus = this.Segment - 1;
+            int segmentMinus = this.SegmentZeroBased;
             Span<Vector<ushort>> searchVectors = stackalloc Vector<ushort>[] {
                 new Vector<ushort>(QUOTE),
                 new Vector<ushort>(LBRACE),
@@ -3507,6 +3310,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3538,6 +3342,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3572,6 +3377,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVector));
                 for (int i = 1; i < searchLen; i++) {
@@ -3610,6 +3416,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.Equals(this.toCompare, MemoryMarshal.GetReference(searchVector));
                 for (int i = 1; i < searchLen; i++) {
@@ -3643,6 +3450,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.GreaterThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3673,6 +3481,7 @@ namespace ScoredProductions.NanoJson {
                     buf.Clear();
                     this.source.Slice(0, this.CurrentIndex + 1).CopyTo(buf);
                     segmentMinus = this.CurrentIndex;
+                    start = 0;
                 }
                 Vector<ushort> eq = Vector.LessThan(this.toCompare, searchVector);
                 if (eq == Vector<ushort>.Zero) {
@@ -3767,96 +3576,114 @@ namespace ScoredProductions.NanoJson {
             if (len <= 256) { // fast-path for small strings: stackalloc to avoid ArrayPool rent
                 Span<char> stackBuffer = stackalloc char[len];
                 TranslateUnicodeIntoBufferFromSpan(in data, in stackBuffer, ref x);
-                return stackBuffer.Slice(0, x).ToString();
+                return new string(stackBuffer.Slice(0, x));
             }
             char[] buffer = ArrayPool<char>.Shared.Rent(len);
             Span<char> bufSpan = buffer.AsSpan(0, len);
             TranslateUnicodeIntoBufferFromSpan(in data, in bufSpan, ref x);
-            string decodedValue = bufSpan.Slice(0, x).ToString();
+            string decodedValue = new string(bufSpan.Slice(0, x));
             ArrayPool<char>.Shared.Return(buffer);
             return decodedValue;
         }
 
         public static int GetStringDecodeLengthFromSpan(in ReadOnlySpan<char> data) {
-            int count = 0;
+            JsonReader reader = new JsonReader(data, true);
             int len = data.Length;
-            int x = len;
-            int check = Math.Max(len - 6, 0);
-            while (x > check) {
-                if (data[--x] == '\\') {
-                    if (x + 5 < len && data[x + 1] == 'u') {
-                        count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
+            if (reader.RetreatTo('\\') < 0) {
+                return len;
+            }
+            int count = len;
+            do {
+                int nextIndex = reader.CurrentIndex + 1;
+                if (nextIndex < len) {
+                    switch (data[nextIndex]) {
+                        case 'u':
+                            if (nextIndex + 4 < len) {
+                                count -= 5; // -4 Hex numbers, +1 from 'u', '\' not counted
+                            }
+                            break;
+                        case 'n':
+                        case 't':
+                        case 'r':
+                        case 'f':
+                        case 'b':
+                        case 'a':
+                            count -= 1; // -1 for the escape character
+                            break;
                     }
                 }
-                else {
-                    count++;
-                }
-            }
-            while (x > 0) {
-                if (data[--x] == '\\') {
-                    if (data[x + 1] == 'u') { // Now safe, len check removed
-                        count -= 4; // -4 Hex numbers, +1 from 'u', '\' not counted
-                    }
-                }
-                else {
-                    count++;
-                }
-            }
+            } while (reader.RetreatTo('\\') >= 0);
             return count;
         }
 
         public static void TranslateUnicodeIntoBufferFromSpan(in ReadOnlySpan<char> data, in Span<char> buffer, ref int sbPos) {
+            JsonReader reader = new JsonReader(data);
             int len = data.Length;
-            int x = -1;
-            int y = 0;
-            int requiredLen;
-            while (++x < len) {
-                if (data[x] == '\\') {
-                    requiredLen = x - y;
-                    data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
-                    sbPos += requiredLen;
-                    if (++x < len) {
-                        char current = data[x];
-                        switch (current) {
-                            case 'n':
-                                buffer[sbPos++] = '\n';
-                                break;
-                            case 't':
-                                buffer[sbPos++] = '\t';
-                                break;
-                            case 'u': {
-                                if (x + 4 >= len) {
-                                    break;
-                                }
-                                buffer[sbPos++] = (char)((ReadHexNumber(data[++x]) * 4096)
-                                    + (ReadHexNumber(data[++x]) * 256)
-                                    + (ReadHexNumber(data[++x]) * 16)
-                                    + ReadHexNumber(data[++x]));
-                                break;
-                            }
-                            case 'r':
-                                buffer[sbPos++] = '\r';
-                                break;
-                            case 'f':
-                                buffer[sbPos++] = '\f';
-                                break;
-                            case 'b':
-                                buffer[sbPos++] = '\b';
-                                break;
-                            case 'a':
-                                buffer[sbPos++] = '\a';
-                                break;
-                            default:
-                                buffer[sbPos++] = current;
-                                break;
-                        }
-                    }
-                    y = x + 1;
-                }
+            if (reader.AdvanceTo('\\') < 0) {
+                data.CopyTo(buffer.Slice(sbPos, len));
+                sbPos += len;
+                return;
             }
-            requiredLen = len - y; // add data after final unicode to the end of the buffer
-            data.Slice(y, requiredLen).CopyTo(buffer.Slice(sbPos, requiredLen));
-            sbPos += requiredLen;
+
+            int currentStart = 0;
+            int endIndex = len - 1;
+            do {
+                int currentIndex = reader.CurrentIndex;
+                int currentLen = currentIndex - currentStart;
+                if (currentLen > 0) {
+                    data.Slice(currentStart, currentLen).CopyTo(buffer.Slice(sbPos, currentLen));
+                    sbPos += currentLen;
+                }
+                if (currentIndex >= endIndex) {
+                    break;
+                }
+                else {
+                    char current = data[++currentIndex];
+                    switch (current) {
+                        case 'n':
+                            buffer[sbPos++] = '\n';
+                            break;
+                        case 't':
+                            buffer[sbPos++] = '\t';
+                            break;
+                        case 'u': {
+                            if (currentIndex + 4 < len) {
+                                buffer[sbPos++] = (char)((ReadHexNumber(data[++currentIndex]) * 4096)
+                                    + (ReadHexNumber(data[++currentIndex]) * 256)
+                                    + (ReadHexNumber(data[++currentIndex]) * 16)
+                                    + ReadHexNumber(data[++currentIndex]));
+                            }
+                            else {
+                                buffer[sbPos++] = current;
+                            }
+                            break;
+                        }
+                        case 'r':
+                            buffer[sbPos++] = '\r';
+                            break;
+                        case 'f':
+                            buffer[sbPos++] = '\f';
+                            break;
+                        case 'b':
+                            buffer[sbPos++] = '\b';
+                            break;
+                        case 'a':
+                            buffer[sbPos++] = '\a';
+                            break;
+                        default:
+                            buffer[sbPos++] = current;
+                            break;
+                    }
+                }
+                currentStart = ++currentIndex;
+                reader.SetIndexPosition(currentIndex);
+            } while (reader.AdvanceTo('\\') > 0);
+
+            int remainingLen = len - currentStart;
+            if (remainingLen > 0) {
+                data.Slice(currentStart, remainingLen).CopyTo(buffer.Slice(sbPos, remainingLen));
+                sbPos += remainingLen;
+            }
         }
 
         /// <summary>
@@ -4092,8 +3919,9 @@ namespace ScoredProductions.NanoJson {
         }
 
         public static class JsonContainerPool {
-            private const int knownMax = 1 << 20;
-            private const int knownMin = 1 << 4;
+            private const int knownMax = 1 << 20; // ArrayPool Shared max, adjust higher or lower to needs
+            //private const int knownMin = 1 << 4; // ArrayPool Shared min
+            private const int knownMin = 1 << 0;
             private const int defaultArraysPerBucket = ushort.MaxValue;
 
             private static int poolMaxArrayLength = knownMax;
@@ -4117,6 +3945,27 @@ namespace ScoredProductions.NanoJson {
                 }
             }
 
+            private static int poolMinArrayLength = knownMin;
+            public static int PoolMinArrayLength
+            {
+                get => poolMinArrayLength;
+                set
+                {
+                    if (ContainerPool.IsValueCreated) {
+                        throw new InvalidOperationException("The ArrayPool has already been created, therefore this value can no longer be updated.");
+                    }
+                    if (value < knownMin) {
+                        poolMinArrayLength = knownMin;
+                    }
+                    else if (value > knownMax) {
+                        poolMinArrayLength = knownMax;
+                    }
+                    else {
+                        poolMinArrayLength = value;
+                    }
+                }
+            }
+
             private static int arraysPerBucket = defaultArraysPerBucket;
             public static int ArraysPerBucket
             {
@@ -4135,7 +3984,7 @@ namespace ScoredProductions.NanoJson {
                 }
             }
 
-            private static readonly Lazy<ArrayPool<JsonMemory>> ContainerPool = new Lazy<ArrayPool<JsonMemory>>(() => ArrayPool<JsonMemory>.Create(PoolMaxArrayLength, ArraysPerBucket), LazyThreadSafetyMode.PublicationOnly);
+            private static readonly Lazy<JsonArrayPool> ContainerPool = new Lazy<JsonArrayPool>(() => new JsonArrayPool(knownMin, PoolMaxArrayLength, ArraysPerBucket));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static JsonMemory[] Rent(int length) {
@@ -4157,47 +4006,108 @@ namespace ScoredProductions.NanoJson {
                 }
             }
 
-            internal sealed class RentedContainer : IDisposable, IEnumerable<JsonMemory> {
-                private volatile JsonMemory[] value;
-                public JsonMemory[] Value => this.value;
+            private class JsonArrayPool : ArrayPool<JsonMemory> {
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                public RentedContainer(int length) {
-                    this.value = Rent(length);
-                }
+                private readonly ConcurrentDictionary<int, ConcurrentQueue<JsonMemory[]>> Buckets;
+                private readonly int lowerBound;
+                private readonly int upperBound;
+                private readonly int arraysPerBucket;
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                public void Dispose() {
-                    GC.SuppressFinalize(this);
-                    this.CleanUp();
-                }
+                public JsonArrayPool(int lowerBound, int upperBound, int arraysPerBucket) {
+                    if (lowerBound < 1) {
+                        throw new ArgumentOutOfRangeException(nameof(lowerBound), "Lower bound must be greater than 0");
+                    }
+                    if (upperBound < lowerBound) {
+                        throw new ArgumentOutOfRangeException(nameof(upperBound), "Upper bound must be greater than or equal to lower bound");
+                    }
+                    if (arraysPerBucket < 1) {
+                        throw new ArgumentOutOfRangeException(nameof(arraysPerBucket), "Arrays per bucket must be greater than 0");
+                    }
+                    this.lowerBound = lowerBound;
+                    this.upperBound = upperBound;
+                    this.arraysPerBucket = arraysPerBucket;
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                ~RentedContainer() {
-                    this.CleanUp();
-                }
+                    int NearestLower = RoundUpToPowerOf2(lowerBound);
+                    int NearestUpper = RoundUpToPowerOf2(upperBound);
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                private void CleanUp() {
-                    lock (this.value) {
-                        if (this.value != null) {
-                            Return(this.Value);
-                            this.value = null;
+                    int count = 1;
+                    while (NearestLower < NearestUpper) {
+                        count++;
+                        NearestLower <<= 1;
+                    }
+
+                    this.Buckets = new ConcurrentDictionary<int, ConcurrentQueue<JsonMemory[]>>(Environment.ProcessorCount, count);
+                    do {
+                        this.Buckets.TryAdd(NearestLower, new ConcurrentQueue<JsonMemory[]>());
+                        if (--count > 0) {
+                            NearestLower >>= 1;
                         }
+                    } while (count > 0);
+                }
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                private static int RoundUpToPowerOf2(int value) {
+                    uint uvalue = Convert.ToUInt32(value);
+                    if (uvalue <= 1) {
+                        return 1;
+                    }
+                    uint upper = 1;
+                    while (upper < uvalue) {
+                        upper <<= 1;
+                    }
+
+                    return Convert.ToInt32(upper);
+                }
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                public override JsonMemory[] Rent(int minimumLength) {
+                    int bucketSize;
+                    if (minimumLength < this.lowerBound) {
+                        bucketSize = this.lowerBound;
+                    }
+                    else if (minimumLength > this.upperBound) {
+                        return new JsonMemory[RoundUpToPowerOf2(minimumLength)];
+                    }
+                    else {
+                        bucketSize = RoundUpToPowerOf2(minimumLength);
+                    }
+
+                    if (this.Buckets.TryGetValue(bucketSize, out ConcurrentQueue<JsonMemory[]> queue)) {
+                        if (queue.TryDequeue(out JsonMemory[] array)) {
+                            return array;
+                        }
+                        else {
+                            return new JsonMemory[bucketSize];
+                        }
+                    }
+                    else {
+                        throw new InvalidOperationException("No bucket found for the specified size.");
                     }
                 }
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                public IEnumerator<JsonMemory> GetEnumerator() {
-                    return ((IEnumerable<JsonMemory>)this.Value).GetEnumerator();
+                public void Return(JsonMemory[] array) {
+                    this.Return(array, true);
                 }
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                IEnumerator IEnumerable.GetEnumerator() {
-                    return this.GetEnumerator();
+                public override void Return(JsonMemory[] array, bool clearArray = false) {
+                    int len = array.Length;
+                    if (len < this.lowerBound || len > this.upperBound || len != RoundUpToPowerOf2(len)) {
+                        return; // Ignore arrays outside the managed range
+                    }
+
+                    if (this.Buckets.TryGetValue(len, out ConcurrentQueue<JsonMemory[]> queue)) {
+                        queue.Enqueue(array);
+                        while (queue.Count > this.arraysPerBucket) {
+                            queue.TryDequeue(out _);
+                        }
+                    }
+                    else {
+                        throw new InvalidOperationException("No bucket found for the specified size.");
+                    }
                 }
             }
-
         }
     }
 
@@ -4263,6 +4173,10 @@ namespace ScoredProductions.NanoJson {
         /// <c>double</c>
         /// </summary>
         Number = 0x20,
+        /// <summary>
+        /// Internal flag to determin if the internal array was rented and can be returned
+        /// </summary>
+        Disposable = 0x40,
 
         Container = Object | Array,
         Value = String | Boolean | Number | Null,
