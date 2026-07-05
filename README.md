@@ -350,7 +350,7 @@ private void RentAPool(int size) {
 ```   
 
 JsonArrayPool is utilised in JsonMemory initially as the temporary store for parsed values, these values are then copied into another rented container which then is the value for ContainedValues.  
-JsonSpan does not use JsonArrayPool, however it does use ArrayPool<char>.Shared for string constructon as while slow enough in comparison due to reading, to get the correct value for string.Create, it would need a second read effectively doubling processing times.  
+JsonSpan does not use JsonArrayPool, however it does use ArrayPool`<char>`.Shared for string constructon as while slow enough in comparison due to reading, to get the correct value for string.Create, it would need a second read effectively doubling processing times.  
 JsonMemory does not have this flaw and is able to quickly determin the required size and build the string via string.Create, eliminating the need for a char buffer.  
 
 ### JsonReader
