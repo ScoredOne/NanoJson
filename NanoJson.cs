@@ -435,6 +435,9 @@ namespace ScoredProductions.NanoJson {
             return false;
         }
 
+        /// <summary>
+        /// Resets the Enumeration search
+        /// </summary>
         public void Reset() {
             this.currentIsEmpty = false;
             this.currentType = 0;
@@ -586,7 +589,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) {
-            return this.TryGetKey(in key, out JsonSpan value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+            return this.TryGetKey(in key, out JsonSpan value) && value.IsString ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
         }
         /// <summary>
         /// Try to get the string value of the object at path
@@ -2028,14 +2031,14 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out JsonMemory value) && value.Type == JsonType.String ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+        public readonly string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(key, out JsonMemory value) && value.IsString ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
         /// <summary>
         /// Try to get the string value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
-            if (this.TryGetKey(key, out JsonMemory value) && value.Type == JsonType.String) {
+            if (this.TryGetKey(key, out JsonMemory value) && value.IsString) {
                 @out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
                 return true;
             }
@@ -2108,7 +2111,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <returns></returns>
         public readonly bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
-            if (this.TryGetKey(in key, out JsonMemory value) && value.Type == JsonType.Number) {
+            if (this.TryGetKey(in key, out JsonMemory value) && value.IsNumber) {
                 return double.TryParse(value.GetValueAsSpan, out @out);
             }
             else {
@@ -2269,7 +2272,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonMemory value) ? (@out = value.Type == JsonType.Boolean && value.GetBool) : (@out = false);
+        public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonMemory value) ? (@out = value.IsBool && value.GetBool) : (@out = false);
 
         /// <summary>
         /// Get the key of This object
@@ -3918,6 +3921,20 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int RoundUpToPowerOf2(int value) {
+            uint uvalue = Convert.ToUInt32(value);
+            if (uvalue <= 1) {
+                return 1;
+            }
+            uint upper = 1;
+            while (upper < uvalue) {
+                upper <<= 1;
+            }
+
+            return Convert.ToInt32(upper);
+        }
+
         public static class JsonContainerPool {
             private const int knownMax = 1 << 20; // ArrayPool Shared max, adjust higher or lower to needs
             //private const int knownMin = 1 << 4; // ArrayPool Shared min
@@ -4046,20 +4063,6 @@ namespace ScoredProductions.NanoJson {
                 }
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                private static int RoundUpToPowerOf2(int value) {
-                    uint uvalue = Convert.ToUInt32(value);
-                    if (uvalue <= 1) {
-                        return 1;
-                    }
-                    uint upper = 1;
-                    while (upper < uvalue) {
-                        upper <<= 1;
-                    }
-
-                    return Convert.ToInt32(upper);
-                }
-
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public override JsonMemory[] Rent(int minimumLength) {
                     int bucketSize;
                     if (minimumLength < this.lowerBound) {
@@ -4097,6 +4100,9 @@ namespace ScoredProductions.NanoJson {
                         return; // Ignore arrays outside the managed range
                     }
 
+                    if (clearArray) {
+                        Array.Clear(array, 0, len);
+                    }
                     if (this.Buckets.TryGetValue(len, out ConcurrentQueue<JsonMemory[]> queue)) {
                         queue.Enqueue(array);
                         while (queue.Count > this.arraysPerBucket) {
