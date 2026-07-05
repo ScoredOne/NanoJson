@@ -246,6 +246,26 @@ private void TryGet(string jsonData) {
 }
 ``` 
 
+### Type checking
+
+JsonType is a flagged enum so equivalence wont work for containers unless its the exact value. This is because Disposable is contained within the Type value.  
+To make the type checking quick and accurate, Is* properties are made available for type checking performing the HasFlag check for you.  
+
+```CS
+private void CheckType(JsonMemory json) {
+	// Wrong
+    if (json.Type == JsonType.Object) {
+		// Wont get here unless backing array was made with non disposable properties
+	}
+	
+	// Correct
+    if (json.IsObject) {
+		// Property performs flag check directly so if its a object it will always enter
+	}
+}
+``` 
+
+
 ### Creating new Json Strings
 
 Using the static methods you can piece together new Json's
