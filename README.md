@@ -62,9 +62,9 @@ LaunchCount=3  WarmupCount=15
 
 Test format:  
 JustParse			= Create object of library and parse json file into it. No output requested from object.  
-ParseToString		= Create object of library and parse json file into it. Take created object and request string of object.  
-ParseReformat		= Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object.  
-ParseToSingleValue	= Create object of library and parse json file into it. Receives index and string path and aquires a single value.  
+ParseToString		= Create object of library and parse json file into it. Take created object and request string of object using all ToString parameters.  
+ParseReformat		= Create object of library and parse json file into it. Created object is iterated over and some values are used to create a new object then request a string of object using all parameters.  
+ParseToSingleValue	= Create object of library and parse json file into it. Receives index and string path and aquires a single value using all ToString parameters.  
 
 ## JsonMemory
 Minimal allocation without compromise on time.  
@@ -103,6 +103,7 @@ Statics are provided to create the objects you want. Constructors are private to
 ## IDisposable Support
 As JsonMemory uses arrays to store the data, it implements IDisposable to allow you to dispose of the arrays when they are no longer needed.
 The pooled arrays are provided by NanoJsonStatics.JsonContainerPool, on dispose the arrays are returned to the pool for reuse.
+
 ```CS
 private void Function(string jsonData) {
     using (JsonMemory JMemory = JsonMemory.ParseJson(jsonData)) {
@@ -113,7 +114,6 @@ private void Function(string jsonData) {
     JMemory2.Dispose(); // Dispose of the arrays when no longer needed at your own leisure
 }
 ```
-This is not required as the provided arrays are wrapped inside a container class that returns them with the finaliser, however disposing them manually retains the speed benefits.
 
 ## JsonMemory arrays
 JsonMemory objects and arrays are built using standard arrays, create the objects you want into a container and then use an Extension or static method for creating a Object or an Array with the array.
