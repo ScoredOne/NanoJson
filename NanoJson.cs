@@ -2843,6 +2843,15 @@ namespace ScoredProductions.NanoJson {
             this.CurrentIndex = this.endIndex + 1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool IsEscaped(int currentIndex) {
+            int backslashCount = 0;
+            while (--currentIndex >= 0 && this.source[currentIndex] == BACKSLASH) {
+                backslashCount++;
+            }
+            return backslashCount % 2 > 0;
+        }
+
         #region # ADVANCE #
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3086,7 +3095,7 @@ namespace ScoredProductions.NanoJson {
                     for (int y = 0; y < Segment; y++) {
                         if (eq[y] > 0) {
                             int t = this.CurrentIndex + (x * Segment) + y;
-                            if (t > 0 && this.source[t - 1] == BACKSLASH) {
+                            if (this.IsEscaped(t)) {
                                 continue;
                             }
                             return this.CurrentIndex = t;
@@ -3098,7 +3107,7 @@ namespace ScoredProductions.NanoJson {
             this.CurrentIndex += (vectorLen * Segment);
             while (this.CurrentIndex <= this.endIndex) {
                 if (this.CurrentValue == searchChar) {
-                    if (this.CanRetreat && this.source[this.CurrentValue - 1] == BACKSLASH) {
+                    if (this.IsEscaped(this.CurrentIndex)) {
                         continue;
                     }
                     return this.CurrentIndex;
@@ -3179,7 +3188,7 @@ namespace ScoredProductions.NanoJson {
                             if (eq[y] > 0) {
                                 WithinQuotes = false;
                                 int t = this.CurrentIndex + (x * Segment) + y;
-                                if (t > 0 && this.source[t - 1] == BACKSLASH) { // consideration of inside quote backslash (\")
+                                if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
                                     continue;
                                 }
                                 this.CurrentIndex = t + 1;
@@ -3234,7 +3243,7 @@ namespace ScoredProductions.NanoJson {
             while (this.CurrentIndex <= this.endIndex) {
                 ushort c = this.CurrentValue;
                 if (WithinQuotes) {
-                    if (c == QUOTE) {
+                    if (c == QUOTE && !this.IsEscaped(this.CurrentIndex)) {
                         WithinQuotes = false;
                     }
                 }
@@ -3295,7 +3304,7 @@ namespace ScoredProductions.NanoJson {
                             if (eq[y] > 0) {
                                 WithinQuotes = false;
                                 int t = this.CurrentIndex + (x * Segment) + y;
-                                if (t > 0 && this.source[t - 1] == BACKSLASH) { // consideration of inside quote backslash (\")
+                                if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
                                     continue;
                                 }
                                 this.CurrentIndex = t + 1;
@@ -3350,7 +3359,7 @@ namespace ScoredProductions.NanoJson {
             while (this.CurrentIndex <= this.endIndex) {
                 ushort c = this.CurrentValue;
                 if (WithinQuotes) {
-                    if (c == QUOTE) {
+                    if (c == QUOTE && !this.IsEscaped(this.CurrentIndex)) {
                         WithinQuotes = false;
                     }
                 }
@@ -3568,7 +3577,7 @@ namespace ScoredProductions.NanoJson {
 
             for (; this.CurrentIndex >= remTarget; this.Decrement()) {
                 if (IsWhiteSpace(this.CurrentValue)) {
-                    if (this.CanRetreat && this.source[this.CurrentValue - 1] == BACKSLASH) {
+                    if (this.IsEscaped(this.CurrentIndex)) {
                         continue;
                     }
                     return this.CurrentValue;
@@ -3585,7 +3594,7 @@ namespace ScoredProductions.NanoJson {
                     for (int i = segmentMinus; i >= 0; i--) {
                         if (eq[i] > 0) {
                             int t = this.CurrentIndex + (x * Segment) + i;
-                            if (t > 0 && this.source[t - 1] == BACKSLASH) {
+                            if (this.IsEscaped(t)) {
                                 continue;
                             }
                             return this.CurrentIndex = t;
