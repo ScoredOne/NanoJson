@@ -171,7 +171,7 @@ namespace ScoredProductions.NanoJson {
                     int left = reader.CurrentIndex + 1;
                     int right;
                     if (continuous) {
-                        right = reader.AdvanceTo(QUOTE);
+                        right = reader.AdvanceToEndQuote();
                     }
                     else {
                         reader.SetIndexToEnd();
@@ -1035,7 +1035,7 @@ namespace ScoredProductions.NanoJson {
                     this.Type = JsonType.String;
                     this.ContainedValues = Array.Empty<JsonMemory>();
                     int left = reader.CurrentIndex + 1;
-                    int right = reader.AdvanceTo(QUOTE);
+                    int right = reader.AdvanceToEndQuote();
 
                     if ((right ^ left) == 0) {
                         this.Value = ReadOnlyMemory<char>.Empty;
@@ -1075,7 +1075,7 @@ namespace ScoredProductions.NanoJson {
                         switch (leftChar) {
                             case QUOTE: {
                                 ++left;
-                                reader.AdvanceTo(QUOTE);
+                                reader.AdvanceToEndQuote();
                                 int r = reader.CurrentIndex;
                                 ushort advance = reader.AdvanceToNotWhiteSpace();
                                 JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
@@ -1216,7 +1216,7 @@ namespace ScoredProductions.NanoJson {
                     int bufPos = bufferIndex;
 
                     while (true) {
-                        if (reader.CurrentValue != QUOTE) {
+                        if (reader.CurrentValue != QUOTE) { // backslash quote (\") not valid outside of string
                             reader.AdvanceTo(QUOTE);
                         }
                         int nameL = reader.CurrentIndex + 1;
@@ -1234,7 +1234,7 @@ namespace ScoredProductions.NanoJson {
                         switch (leftChar) {
                             case QUOTE: {
                                 left++;
-                                reader.AdvanceTo(QUOTE);
+                                reader.AdvanceToEndQuote();
                                 int r = reader.CurrentIndex;
                                 ushort advance = reader.AdvanceToNotWhiteSpace();
                                 JsonContainerPool.EnsureBufferCapacity(bufPos + 1, ref existingBuffer);
@@ -3072,6 +3072,44 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int AdvanceToEndQuote() {
+            if (!this.Increment()) {
+                return -1;
+            }
+            Vector<ushort> quote = new Vector<ushort>(QUOTE);
+
+            ReadOnlySpan<Vector<ushort>> vectorData = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(this.CurrentIndex));
+            int vectorLen = vectorData.Length;
+            for (int x = 0; x < vectorLen; x++) {
+                Vector<ushort> eq = Vector.Equals(vectorData[x], quote);
+                if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
+                    for (int y = 0; y < Segment; y++) {
+                        if (eq[y] > 0) {
+                            int t = this.CurrentIndex + (x * Segment) + y;
+                            if (t > 0 && this.source[t - 1] == BACKSLASH) {
+                                continue;
+                            }
+                            return this.CurrentIndex = t;
+                        }
+                    }
+                }
+            }
+            ushort searchChar = quote[0];
+            this.CurrentIndex += (vectorLen * Segment);
+            while (this.CurrentIndex <= this.endIndex) {
+                if (this.CurrentValue == searchChar) {
+                    if (this.CanRetreat && this.source[this.CurrentValue - 1] == BACKSLASH) {
+                        continue;
+                    }
+                    return this.CurrentIndex;
+                }
+                this.CurrentIndex++;
+            }
+            this.CurrentIndex = this.endIndex;
+            return -1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort AdvanceToValueEnding() {
             if (!this.Increment()) {
                 return '\0';
@@ -3140,7 +3178,11 @@ namespace ScoredProductions.NanoJson {
                         for (int y = 0; y < Segment; y++) {
                             if (eq[y] > 0) {
                                 WithinQuotes = false;
-                                this.CurrentIndex += (x * Segment) + y + 1;
+                                int t = this.CurrentIndex + (x * Segment) + y;
+                                if (t > 0 && this.source[t - 1] == BACKSLASH) { // consideration of inside quote backslash (\")
+                                    continue;
+                                }
+                                this.CurrentIndex = t + 1;
                                 goto Rebuild;
                             }
                         }
@@ -3252,7 +3294,11 @@ namespace ScoredProductions.NanoJson {
                         for (int y = 0; y < Segment; y++) {
                             if (eq[y] > 0) {
                                 WithinQuotes = false;
-                                this.CurrentIndex += (x * Segment) + y + 1;
+                                int t = this.CurrentIndex + (x * Segment) + y;
+                                if (t > 0 && this.source[t - 1] == BACKSLASH) { // consideration of inside quote backslash (\")
+                                    continue;
+                                }
+                                this.CurrentIndex = t + 1;
                                 goto Rebuild;
                             }
                         }
@@ -3511,6 +3557,48 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int RetreatToEndQuote() {
+            int remTarget = this.CurrentIndex - (this.CurrentIndex % Segment);
+            if (!this.Decrement()) {
+                return -1;
+            }
+            int segmentMinus = this.SegmentZeroBased;
+
+            Vector<ushort> quote = new Vector<ushort>(QUOTE);
+
+            for (; this.CurrentIndex >= remTarget; this.Decrement()) {
+                if (IsWhiteSpace(this.CurrentValue)) {
+                    if (this.CanRetreat && this.source[this.CurrentValue - 1] == BACKSLASH) {
+                        continue;
+                    }
+                    return this.CurrentValue;
+                }
+            }
+
+            Vector<ushort> searchVector = new Vector<ushort>(33); // 32 == ' ' 
+            ReadOnlySpan<Vector<ushort>> translated = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(0, remTarget));
+
+            for (int x = translated.Length - 1; x >= 0; x--) {
+                Vector<ushort> current = translated[x];
+                Vector<ushort> eq = Vector.Equals(current, searchVector);
+                if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
+                    for (int i = segmentMinus; i >= 0; i--) {
+                        if (eq[i] > 0) {
+                            int t = this.CurrentIndex + (x * Segment) + i;
+                            if (t > 0 && this.source[t - 1] == BACKSLASH) {
+                                continue;
+                            }
+                            return this.CurrentIndex = t;
+                        }
+                    }
+                }
+            }
+
+            this.CurrentIndex = 0;
+            return -1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort RetreatToWhiteSpace() {
             int remTarget = this.CurrentIndex - (this.CurrentIndex % Segment);
             if (!this.Decrement()) {
@@ -3620,6 +3708,7 @@ namespace ScoredProductions.NanoJson {
         internal const ushort A_UPPER = 'A';
         internal const ushort S_LOWER = 's';
         internal const ushort S_UPPER = 'S';
+        internal const ushort BACKSLASH = '\\';
 
         public const ulong JSONWHITESPACEMASK = (1UL << 9) | (1UL << 10) | (1UL << 13) | (1UL << 32);
 
