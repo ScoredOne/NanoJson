@@ -205,7 +205,7 @@ namespace ScoredProductions.NanoJson {
                             reader.RetreatTo(RBRACKET);
                         }
                         if (reader.CurrentValue != RBRACKET) {
-                            throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                            throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()})", nameof(value));
                         }
                     }
                     int right;
@@ -236,7 +236,7 @@ namespace ScoredProductions.NanoJson {
                             reader.RetreatTo(RBRACE);
                         }
                         if (reader.CurrentValue != RBRACE) {
-                            throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                            throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()})", nameof(value));
                         }
                     }
                     int right;
@@ -273,7 +273,7 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
 
-                    throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
                 }
                 case T_LOWER:
                 case T_UPPER: {
@@ -298,7 +298,7 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
 
-                    throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
                 }
                 case F_LOWER:
                 case F_UPPER: {
@@ -326,7 +326,7 @@ namespace ScoredProductions.NanoJson {
                         }
                     }
 
-                    throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
                 }
                 default: {
                     type = JsonType.Number;
@@ -339,11 +339,11 @@ namespace ScoredProductions.NanoJson {
                     if (IsNumber(value)) {
                         return true;
                     }
-                    throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
                 }
             }
 
-            throw new ArgumentException($"Parse failed (TryParse: {reader.ToString()})", nameof(reader));
+            throw new ArgumentException($"Parse failed ({reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
         }
 
         /// <summary>
@@ -1087,7 +1087,7 @@ namespace ScoredProductions.NanoJson {
                                 else if (advance == RBRACKET) {
                                     goto ReadComplete;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                             }
                             case LBRACE:
                             case LBRACKET: {
@@ -1102,7 +1102,7 @@ namespace ScoredProductions.NanoJson {
                                         reader.AdvanceToNotWhiteSpace();
                                         continue;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                             }
                             default: {
                                 reader.AdvanceToValueEnding();
@@ -1124,7 +1124,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
@@ -1141,7 +1141,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
@@ -1161,7 +1161,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
@@ -1169,7 +1169,7 @@ namespace ScoredProductions.NanoJson {
                                             existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Number, numberArea);
                                             break;
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                 }
 
@@ -1181,7 +1181,7 @@ namespace ScoredProductions.NanoJson {
                             }
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                     ReadComplete:
                     int valuesLen = bufPos - bufferIndex;
                     this.ContainerLength = valuesLen;
@@ -1246,7 +1246,7 @@ namespace ScoredProductions.NanoJson {
                                 else if (advance == RBRACE) {
                                     goto ReadComplete;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                             }
                             case LBRACE:
                             case LBRACKET: {
@@ -1260,7 +1260,7 @@ namespace ScoredProductions.NanoJson {
                                     case COMMA:
                                         continue;
                                 }
-                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                             }
                             default: {
                                 reader.AdvanceToValueEnding();
@@ -1282,7 +1282,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
@@ -1299,7 +1299,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
@@ -1319,7 +1319,7 @@ namespace ScoredProductions.NanoJson {
                                                 }
                                             }
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     default: {
                                         ReadOnlyMemory<char> numberArea = reference.Slice(left, reader.CurrentIndex - left);
@@ -1327,7 +1327,7 @@ namespace ScoredProductions.NanoJson {
                                             existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Number, numberArea);
                                             break;
                                         }
-                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
 
                                 }
@@ -1337,7 +1337,7 @@ namespace ScoredProductions.NanoJson {
                                 continue;
                             }
                         }
-                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                        throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                         NextObject:
                         continue;
                     }
@@ -1376,7 +1376,7 @@ namespace ScoredProductions.NanoJson {
                             }
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
                 case T_LOWER:
                 case T_UPPER: {
@@ -1401,7 +1401,7 @@ namespace ScoredProductions.NanoJson {
                             }
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
                 case F_LOWER:
                 case F_UPPER: {
@@ -1429,7 +1429,7 @@ namespace ScoredProductions.NanoJson {
                             }
                         }
                     }
-                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, TryParse: {reference.ToString()}, {reader.ToString()})", nameof(reference));
+                    throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
                 default: {
                     this.ContainerLength = 0;
