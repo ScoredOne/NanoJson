@@ -381,7 +381,7 @@ namespace ScoredProductions.NanoJson {
                 }
                 else {
                     left = providedReader.CurrentIndex;
-                    providedReader.AdvanceTo(QUOTE);
+                    providedReader.AdvanceToEndQuote();
                     this.currentKey = this.Value.Slice(left, providedReader.CurrentIndex - left);
                 }
                 providedReader.AdvanceTo(COLON);
@@ -1220,7 +1220,7 @@ namespace ScoredProductions.NanoJson {
                             reader.AdvanceTo(QUOTE);
                         }
                         int nameL = reader.CurrentIndex + 1;
-                        reader.AdvanceTo(QUOTE);
+                        reader.AdvanceToEndQuote();
                         int nameR = reader.CurrentIndex - nameL;
                         if (nameR == 1) {
                             nameL = 0;
