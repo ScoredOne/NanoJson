@@ -33,7 +33,7 @@ LaunchCount=3  WarmupCount=15
 | LightJson                     | JustParse          | 343,159.7 ns |   990.26 ns |  5,134.61 ns | 342,950.3 ns | 32.2266 | 14.1602 |       - |  542440 B |
 | NewtonsoftJson                | JustParse          | 468,055.1 ns | 1,618.99 ns |  8,437.78 ns | 468,527.7 ns | 36.6211 | 26.3672 |       - |  618136 B |
 |                               |                    |              |             |              |              |         |         |         |           |
-| NanoJson_JsonSpan*            | ParseToString      | 399,480.7 ns | 3,461.44 ns | 18,009.44 ns | 390,467.6 ns | 28.3203 | 28.3203 | 28.3203 |   95649 B |
+| NanoJson_JsonSpan             | ParseToString      | 399,480.7 ns | 3,461.44 ns | 18,009.44 ns | 390,467.6 ns | 28.3203 | 28.3203 | 28.3203 |   95649 B |
 | NanoJson_JsonMemory + Dispose | ParseToString      | 265,354.2 ns |   755.25 ns |  3,929.47 ns | 265,416.4 ns | 30.2734 | 30.2734 | 30.2734 |   95650 B |
 | NanoJson_JsonMemory + GC      | ParseToString      | 277,224.4 ns | 1,493.48 ns |  7,783.65 ns | 277,132.3 ns | 30.2734 | 30.2734 | 30.2734 |  205618 B |
 | SystemTextJson_Node           | ParseToString      | 261,574.8 ns |   956.13 ns |  4,923.45 ns | 261,256.3 ns | 27.3438 | 27.3438 | 27.3438 |  183740 B |
@@ -41,7 +41,7 @@ LaunchCount=3  WarmupCount=15
 | LightJson                     | ParseToString      | 512,072.5 ns | 1,390.94 ns |  7,236.89 ns | 511,445.7 ns | 41.9922 | 20.5078 |       - |  714936 B |
 | NewtonsoftJson                | ParseToString      | 652,492.1 ns | 2,526.51 ns | 13,167.53 ns | 652,549.5 ns | 54.6875 | 53.7109 | 27.3438 |  804049 B |
 |                               |                    |              |             |              |              |         |         |         |           |
-| NanoJson_JsonSpan*            | ParseReformat      | 393,114.6 ns | 1,336.79 ns |  6,955.18 ns | 392,481.4 ns |  6.3477 |  0.9766 |       - |  112040 B |
+| NanoJson_JsonSpan**           | ParseReformat      | 393,114.6 ns | 1,336.79 ns |  6,955.18 ns | 392,481.4 ns |  6.3477 |  0.9766 |       - |  112040 B |
 | NanoJson_JsonMemory + Dispose | ParseReformat      | 221,980.0 ns |   697.31 ns |  3,634.21 ns | 222,179.3 ns |  5.6152 |  0.4883 |       - |   98056 B |
 | NanoJson_JsonMemory + GC      | ParseReformat      | 217,106.6 ns |   684.99 ns |  3,569.98 ns | 217,497.4 ns | 12.2070 |  3.9063 |       - |  208024 B |
 | SystemTextJson_Node           | ParseReformat      | 334,806.5 ns | 1,279.17 ns |  6,621.20 ns | 334,769.4 ns | 23.4375 |  9.7656 |       - |  415696 B |
@@ -49,7 +49,7 @@ LaunchCount=3  WarmupCount=15
 | LightJson                     | ParseReformat      | 479,086.8 ns | 1,416.03 ns |  7,354.85 ns | 477,931.2 ns | 42.9688 | 18.0664 |       - |  725168 B |
 | NewtonsoftJson                | ParseReformat      | 671,121.2 ns | 5,678.09 ns | 29,592.74 ns | 684,653.5 ns | 54.6875 | 26.3672 |       - |  930152 B |
 |                               |                    |              |             |              |              |         |         |         |           |
-| NanoJson_JsonSpan*            | ParseToSingleValue |  34,002.4 ns |   258.45 ns |  1,323.86 ns |  33,410.6 ns |       - |       - |       - |      56 B |
+| NanoJson_JsonSpan             | ParseToSingleValue |  34,002.4 ns |   258.45 ns |  1,323.86 ns |  33,410.6 ns |       - |       - |       - |      56 B |
 | NanoJson_JsonMemory + Dispose | ParseToSingleValue | 140,419.4 ns |   456.27 ns |  2,369.86 ns | 140,275.1 ns |       - |       - |       - |      56 B |
 | NanoJson_JsonMemory + GC      | ParseToSingleValue | 138,948.5 ns |   578.82 ns |  3,011.53 ns | 138,568.5 ns |  6.3477 |  1.2207 |       - |  110024 B |
 | SystemTextJson_Node           | ParseToSingleValue | 140,788.8 ns |   285.23 ns |  1,478.93 ns | 140,810.9 ns |  5.8594 |  0.9766 |       - |  100032 B |
