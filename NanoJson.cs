@@ -12,7 +12,7 @@
 ///		                                                    ///
 ///     Base: NetStandard 2.1 C# 8                          ///
 ///                                                         ///
-///     Version: 1.4.1                                      ///
+///     Version: 1.4.2                                      ///
 ///															///
 ///////////////////////////////////////////////////////////////
 
@@ -4194,13 +4194,18 @@ namespace ScoredProductions.NanoJson {
             private static readonly Lazy<JsonArrayPool> ContainerPool = new Lazy<JsonArrayPool>(() => new JsonArrayPool(knownMin, PoolMaxArrayLength, ArraysPerBucket));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static JsonMemory[] Rent(int length) {
+            public static JsonMemory[] Rent(int length) {
                 return ContainerPool.Value.Rent(length);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static void Return(JsonMemory[] array) {
+            public static void Return(JsonMemory[] array) {
                 ContainerPool.Value.Return(array, true);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static void Return(JsonMemory[] array, bool clear) {
+                ContainerPool.Value.Return(array, clear);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
