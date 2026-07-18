@@ -1457,6 +1457,9 @@ namespace ScoredProductions.NanoJson {
                 case JsonType.Array:
                 case JsonType.Object:
                     this.Type = type;
+                    if (rented) {
+                        this.Type |= JsonType.Disposable;
+                    }
                     this.ContainedValues = contents;
                     if (innerLength >= 0) {
                         this.ContainerLength = innerLength;
