@@ -1457,7 +1457,7 @@ namespace ScoredProductions.NanoJson {
                 case JsonType.Array:
                 case JsonType.Object:
                     this.Type = type;
-                    if (rented && contents.Length == RoundUpToPowerOf2(contents.Length)) {
+                    if (rented && JsonContainerPool.CheckArrayCanBePooled(contents)) {
                         this.Type |= JsonType.Disposable;
                     }
                     this.ContainedValues = contents;
@@ -2284,17 +2284,17 @@ namespace ScoredProductions.NanoJson {
         public readonly bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonMemory value) ? (@out = value.IsBool && value.GetBool) : (@out = false);
 
         /// <summary>
-        /// Get the key of This object
+        /// Get the key of This object as a string (will allocate)
         /// </summary>
         public readonly string GetKey => this.Key.IsEmpty ? string.Empty : this.Key.ToString();
 
         /// <summary>
-        /// Get the key of This object
+        /// Get the key span of This object
         /// </summary>
         public readonly ReadOnlySpan<char> GetKeyAsSpan => this.Key.IsEmpty ? ReadOnlySpan<char>.Empty : this.Key.Span;
 
         /// <summary>
-        /// Get the key of This object
+        /// Get the key memory of This object
         /// </summary>
         public readonly ReadOnlyMemory<char> GetKeyAsMemory => this.Key.IsEmpty ? ReadOnlyMemory<char>.Empty : this.Key;
 
@@ -4134,12 +4134,12 @@ namespace ScoredProductions.NanoJson {
             private static int poolMaxArrayLength = knownMax;
             public static int PoolMaxArrayLength
             {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 get => poolMaxArrayLength;
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set
                 {
-                    if (ContainerPool.IsValueCreated) {
-                        throw new InvalidOperationException("The ArrayPool has already been created, therefore this value can no longer be updated.");
-                    }
+                    value = RoundUpToPowerOf2(value);
                     if (value < knownMin) {
                         poolMaxArrayLength = knownMin;
                     }
@@ -4149,18 +4149,21 @@ namespace ScoredProductions.NanoJson {
                     else {
                         poolMaxArrayLength = value;
                     }
+                    if (ContainerPool.IsValueCreated) {
+                        ContainerPool.Value.UpdateUpperBound(poolMaxArrayLength);
+                    }
                 }
             }
 
             private static int poolMinArrayLength = knownMin;
             public static int PoolMinArrayLength
             {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 get => poolMinArrayLength;
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set
                 {
-                    if (ContainerPool.IsValueCreated) {
-                        throw new InvalidOperationException("The ArrayPool has already been created, therefore this value can no longer be updated.");
-                    }
+                    value = RoundUpToPowerOf2(value);
                     if (value < knownMin) {
                         poolMinArrayLength = knownMin;
                     }
@@ -4170,25 +4173,36 @@ namespace ScoredProductions.NanoJson {
                     else {
                         poolMinArrayLength = value;
                     }
+                    if (ContainerPool.IsValueCreated) {
+                        ContainerPool.Value.UpdateUpperBound(poolMinArrayLength);
+                    }
                 }
             }
 
             private static int arraysPerBucket = defaultArraysPerBucket;
             public static int ArraysPerBucket
             {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 get => arraysPerBucket;
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set
                 {
-                    if (ContainerPool.IsValueCreated) {
-                        throw new InvalidOperationException("The ArrayPool has already been created, therefore this value can no longer be updated.");
-                    }
                     if (value < 1) {
                         arraysPerBucket = 1;
                     }
                     else {
                         arraysPerBucket = value;
                     }
+                    if (ContainerPool.IsValueCreated) {
+                        ContainerPool.Value.UpdateUpperBound(arraysPerBucket);
+                    }
                 }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool CheckArrayCanBePooled(in JsonMemory[] array) {
+                int len = array.Length;
+                return len >= PoolMinArrayLength && len <= PoolMaxArrayLength && len == RoundUpToPowerOf2(len);
             }
 
             private static readonly Lazy<JsonArrayPool> ContainerPool = new Lazy<JsonArrayPool>(() => new JsonArrayPool(knownMin, PoolMaxArrayLength, ArraysPerBucket));
@@ -4221,9 +4235,9 @@ namespace ScoredProductions.NanoJson {
             private class JsonArrayPool : ArrayPool<JsonMemory> {
 
                 private readonly ConcurrentDictionary<int, ConcurrentQueue<JsonMemory[]>> Buckets;
-                private readonly int lowerBound;
-                private readonly int upperBound;
-                private readonly int arraysPerBucket;
+                private int lowerBound;
+                private int upperBound;
+                private int arraysPerBucket;
 
                 public JsonArrayPool(int lowerBound, int upperBound, int arraysPerBucket) {
                     if (lowerBound < 1) {
@@ -4290,10 +4304,10 @@ namespace ScoredProductions.NanoJson {
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public override void Return(JsonMemory[] array, bool clearArray = false) {
-                    int len = array.Length;
-                    if (len < this.lowerBound || len > this.upperBound || len != RoundUpToPowerOf2(len)) {
+                    if (!CheckArrayCanBePooled(array)) {
                         return; // Ignore arrays outside the managed range
                     }
+                    int len = array.Length;
 
                     if (clearArray) {
                         Array.Clear(array, 0, len);
@@ -4306,6 +4320,74 @@ namespace ScoredProductions.NanoJson {
                     }
                     else {
                         throw new InvalidOperationException("No bucket found for the specified size.");
+                    }
+                }
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                public void UpdateBucketLimit(int newBucketLimit) {
+                    this.arraysPerBucket = newBucketLimit < 1 ? 1 : newBucketLimit;
+                    int bound = this.lowerBound;
+                    do {
+                        if (this.Buckets.TryGetValue(bound, out ConcurrentQueue<JsonMemory[]> queue)) {
+                            while (queue.Count > this.arraysPerBucket) {
+                                queue.TryDequeue(out _);
+                            }
+                        }
+                        else {
+                            this.Buckets.TryAdd(bound, new ConcurrentQueue<JsonMemory[]>());
+                        }
+                        bound <<= 1;
+                    } while (bound <= this.upperBound);
+                }
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                public void UpdateLowerBound(int newLower) {
+                    if (newLower < 1) {
+                        throw new ArgumentOutOfRangeException(nameof(newLower), "Lower bound must be greater than 0");
+                    }
+                    if (newLower > this.upperBound) {
+                        throw new ArgumentOutOfRangeException(nameof(newLower), "New lower bound is larger than the current upper bound, operation invalid");
+                    }
+                    newLower = RoundUpToPowerOf2(newLower);
+                    if (newLower == this.lowerBound) {
+                        return;
+                    }
+                    bool shrink = newLower > this.lowerBound;
+                    if (shrink) {
+                        do {
+                            this.Buckets.TryRemove(this.lowerBound, out _);
+                            this.lowerBound <<= 1;
+                        } while (this.lowerBound < newLower);
+                    }
+                    else {
+                        while (this.lowerBound >= newLower) {
+                            this.lowerBound >>= 1;
+                            this.Buckets.TryAdd(this.lowerBound, new ConcurrentQueue<JsonMemory[]>());
+                        }
+                    }
+                }
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                public void UpdateUpperBound(int newUpper) {
+                    if (newUpper < this.lowerBound) {
+                        throw new ArgumentOutOfRangeException(nameof(newUpper), "Upper bound must be greater than or equal to lower bound");
+                    }
+                    newUpper = RoundUpToPowerOf2(newUpper);
+                    if (newUpper == this.upperBound) {
+                        return;
+                    }
+                    bool shrink = newUpper < this.upperBound;
+                    if (shrink) {
+                        do {
+                            this.Buckets.TryRemove(this.upperBound, out _);
+                            this.upperBound <<= 1;
+                        } while (this.upperBound < newUpper);
+                    }
+                    else {
+                        while (this.upperBound >= newUpper) {
+                            this.upperBound >>= 1;
+                            this.Buckets.TryAdd(this.upperBound, new ConcurrentQueue<JsonMemory[]>());
+                        }
                     }
                 }
             }
