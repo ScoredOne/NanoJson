@@ -609,6 +609,9 @@ namespace ScoredProductions.NanoJson {
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
 
             if (this.IsString) {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 if (translateUnicode) {
                     return this.GetStringDecoded;
                 }
@@ -1765,6 +1768,9 @@ namespace ScoredProductions.NanoJson {
             bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
 
             if (this.IsString) {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 if (translateUnicode) {
                     return this.GetStringDecoded;
                 }
