@@ -568,6 +568,8 @@ namespace ScoredProductions.NanoJson {
 
         public readonly int KeyLen => this.Key.Length;
 
+        public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.Value);
+
         /// <summary>
         /// Get the string value as-is in relation to this object
         /// </summary>
@@ -575,11 +577,12 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 return this.Value.ToString();
             }
         }
-
-        public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.Value);
 
         /// <summary>
         /// Get the decoded string value of the object
@@ -588,6 +591,9 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 return GetStringDecodedFromSpan(in this.Value);
             }
         }
@@ -1645,6 +1651,8 @@ namespace ScoredProductions.NanoJson {
         private readonly int KeyHash => ComputeHash(this.Key.Span, out _);
         private readonly int KeyLen => this.GetKeyAsSpan.Length;
 
+        public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
+
         public readonly override string ToString() => this.ToString(Default_ToStringFormat);
 
         private readonly int GetSerializedLength(bool asValue, bool pretty, int tabLen, bool translateUnicode, bool lowerCaseBool, bool reparseNumbers, int indent = 0) {
@@ -2033,11 +2041,12 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 return this.Value.ToString();
             }
         }
-
-        public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
 
         /// <summary>
         /// Get the decoded string value of the object (Allocates a new string)
@@ -2046,6 +2055,9 @@ namespace ScoredProductions.NanoJson {
         {
             get
             {
+                if (this.Value.IsEmpty) {
+                    return string.Empty;
+                }
                 return GetStringDecodedFromMemory(this.GetValueAsMemory);
             }
         }
