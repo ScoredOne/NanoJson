@@ -20,7 +20,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonMemory_Parse_ToString_None() {
                 JsonMemory parse = JsonMemory.ParseJson(JSON);
                 int expectedLen = 29760;
-                string actual = parse.ToString(ToStringFormat.None);
+                string actual = parse.ToString(JsonToStringFormat.None);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -28,7 +28,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonMemory_Parse_ToString_TranslateUnicode() {
                 JsonMemory parse = JsonMemory.ParseJson(JSON);
                 int expectedLen = 29755;
-                string actual = parse.ToString(ToStringFormat.TranslateUnicode);
+                string actual = parse.ToString(JsonToStringFormat.TranslateUnicode);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -36,7 +36,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonMemory_Parse_ToString_Pretty() {
                 JsonMemory parse = JsonMemory.ParseJson(JSON);
                 int expectedLen = 53239;
-                string actual = parse.ToString(ToStringFormat.Pretty);
+                string actual = parse.ToString(JsonToStringFormat.Pretty);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -44,7 +44,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonMemory_Parse_ToString_Pretty_Tabs() {
                 JsonMemory parse = JsonMemory.ParseJson(JSON);
                 int expectedLen = 36961;
-                string actual = parse.ToString(ToStringFormat.Pretty | ToStringFormat.TabCharacterIndent);
+                string actual = parse.ToString(JsonToStringFormat.Pretty | JsonToStringFormat.TabCharacterIndent);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -52,7 +52,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonMemory_Parse_ToString_All() {
                 JsonMemory parse = JsonMemory.ParseJson(JSON);
                 int expectedLen = 36956;
-                string actual = parse.ToString(ToStringFormat.All);
+                string actual = parse.ToString(JsonToStringFormat.All);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -82,7 +82,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonSpan_ToString_None() {
                 JsonSpan parse = new JsonSpan(JSON);
                 int expectedLen = 29760;
-                string actual = parse.ToString(ToStringFormat.None);
+                string actual = parse.ToString(JsonToStringFormat.None);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -90,7 +90,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonSpan_ToString_TranslateUnicode() {
                 JsonSpan parse = new JsonSpan(JSON);
                 int expectedLen = 29755;
-                string actual = parse.ToString(ToStringFormat.TranslateUnicode);
+                string actual = parse.ToString(JsonToStringFormat.TranslateUnicode);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -98,7 +98,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonSpan_ToString_Pretty() {
                 JsonSpan parse = new JsonSpan(JSON);
                 int expectedLen = 53239;
-                string actual = parse.ToString(ToStringFormat.Pretty);
+                string actual = parse.ToString(JsonToStringFormat.Pretty);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -106,7 +106,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonSpan_ToString_Pretty_Tabs() {
                 JsonSpan parse = new JsonSpan(JSON);
                 int expectedLen = 36961;
-                string actual = parse.ToString(ToStringFormat.Pretty | ToStringFormat.TabCharacterIndent);
+                string actual = parse.ToString(JsonToStringFormat.Pretty | JsonToStringFormat.TabCharacterIndent);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -114,7 +114,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
             public void JsonSpan_ToString_All() {
                 JsonSpan parse = new JsonSpan(JSON);
                 int expectedLen = 36956;
-                string actual = parse.ToString(ToStringFormat.All);
+                string actual = parse.ToString(JsonToStringFormat.All);
                 Assert.AreEqual(expectedLen, actual.Length);
             }
 
@@ -144,7 +144,7 @@ namespace ScoredProductions.NanoJson_UnitTests {
                 JsonSpan parseSpan = new JsonSpan(JSON);
                 JsonMemory parseMemory = JsonMemory.ParseJson(JSON);
 
-                Assert.AreEqual(parseSpan.ToString(ToStringFormat.All), parseMemory.ToString(ToStringFormat.All));
+                Assert.AreEqual(parseSpan.ToString(JsonToStringFormat.All), parseMemory.ToString(JsonToStringFormat.All));
             }
         }
     }

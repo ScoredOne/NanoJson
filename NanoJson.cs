@@ -122,6 +122,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <param name="reader"></param>
         /// <exception cref="ArgumentException"></exception>
+        [MethodImpl(MethodImplOptions.Synchronized)]
         private JsonSpan(in ReadOnlySpan<char> key, ref JsonReader reader, bool continuous) {
             this.currentKey = ReadOnlySpan<char>.Empty;
             this.currentValue = ReadOnlySpan<char>.Empty;
@@ -363,6 +364,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
+        [MethodImpl(MethodImplOptions.Synchronized)]
         public bool MoveNext() {
             if (this.IsObject) {
                 ref JsonReader providedReader = ref this.reader;
@@ -435,6 +437,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Resets the Enumeration search
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public void Reset() {
             this.currentIsEmpty = false;
             this.currentType = 0;
@@ -450,6 +453,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetIndex(in int index, out JsonSpan value) {
             if (index < 0) {
                 throw new ArgumentOutOfRangeException(nameof(index));
@@ -492,6 +496,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetKey(in ReadOnlySpan<char> key, out JsonSpan value) {
             if (key.IsEmpty) {
                 throw new ArgumentOutOfRangeException(nameof(key));
@@ -550,6 +555,7 @@ namespace ScoredProductions.NanoJson {
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public JsonSpan GetEnumerator() {
             this.Reset();
             return this;
@@ -565,28 +571,39 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the string value as-is in relation to this object
         /// </summary>
-        public readonly string GetStringLiteral => this.Value.ToString();
+        public readonly string GetStringLiteral
+        {
+            get
+            {
+                return this.Value.ToString();
+            }
+        }
 
         public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.Value);
 
         /// <summary>
         /// Get the decoded string value of the object
         /// </summary>
-        public readonly string GetStringDecoded => GetStringDecodedFromSpan(in this.Value);
+        public readonly string GetStringDecoded
+        {
+            get
+            {
+                return GetStringDecodedFromSpan(in this.Value);
+            }
+        }
 
         /// <summary>
         /// Try to get the string value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) {
-            return this.TryGetKey(in key, out JsonSpan value) && value.IsString ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
-        }
+        public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(in key, out JsonSpan value) && value.IsString? (decoded? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
         /// <summary>
         /// Try to get the string value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
             if (this.TryGetKey(key, out JsonSpan value) && value.IsString) {
                 @out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
@@ -598,15 +615,15 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public override string ToString() => this.ToString(Default_ToStringFormat);
+        public override readonly string ToString() => this.ToString(Default_ToStringFormat);
 
-        public string ToString(ToStringFormat format) {
+        public readonly string ToString(JsonToStringFormat format) {
             int indent = 0;
             int pos = 0;
 
-            bool translateUnicode = HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
-            bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
-            bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
+            bool translateUnicode = HasFlag((long)format, (long)JsonToStringFormat.TranslateUnicode);
+            bool lowerCaseBool = HasFlag((long)format, (long)JsonToStringFormat.LowerCaseBool);
+            bool reparseNumbers = HasFlag((long)format, (long)JsonToStringFormat.ReParseNumbers);
 
             if (this.IsString) {
                 if (this.Value.IsEmpty) {
@@ -620,7 +637,7 @@ namespace ScoredProductions.NanoJson {
                 }
             }
             else if (this.IsNull) {
-                if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                if (HasFlag((long)format, (long)JsonToStringFormat.NullReturnsEmptyReference)) {
                     return null;
                 }
                 else {
@@ -644,8 +661,8 @@ namespace ScoredProductions.NanoJson {
                 }
             }
 
-            bool pretty = HasFlag((long)format, (long)ToStringFormat.Pretty);
-            bool tabs = pretty && HasFlag((long)format, (long)ToStringFormat.TabCharacterIndent);
+            bool pretty = HasFlag((long)format, (long)JsonToStringFormat.Pretty);
+            bool tabs = pretty && HasFlag((long)format, (long)JsonToStringFormat.TabCharacterIndent);
 
             ReadOnlySpan<char> indentSpace = tabs ? stackalloc char[] { '\t' } : INDENT_TABS.AsSpan();
             char[] buffer = ArrayPool<char>.Shared.Rent((int)Math.Min((double)this.GetLength * (indentSpace.Length * 4), int.MaxValue));
@@ -855,9 +872,8 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the number contained inside This object
         /// </summary>
-        public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return double.TryParse(this.Value, out double value) ? GetConvertedValue<T>(value) : default;
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => double.TryParse(this.Value, out double value) ? GetConvertedValue<T>(value) : default;
 
         /// <summary>
         /// Try to get the numerical value of the object at path
@@ -877,14 +893,13 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public double TryGetNumber(in ReadOnlySpan<char> key) {
-            return this.TryGetNumber(in key, out double value) ? value : double.NaN;
-        }
+        public double TryGetNumber(in ReadOnlySpan<char> key) => this.TryGetNumber(in key, out double value) ? value : double.NaN;
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
             if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 return double.TryParse(value.Value, out @out);
@@ -900,23 +915,20 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return this.TryGetNumber<T>(key.AsSpan());
-        }
+        public T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => this.TryGetNumber<T>(key.AsSpan());
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return this.TryGetNumber(key.AsSpan(), out @out);
-        }
+        public bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => this.TryGetNumber(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             this.TryGetNumber(in key, out T value);
             return value;
@@ -926,6 +938,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 @out = value.GetNumberOfType<T>();
@@ -947,9 +960,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetBool(string key) {
-            return this.TryGetKey(key, out JsonSpan value) && value.GetBool;
-        }
+        public bool TryGetBool(string key) => this.TryGetKey(key, out JsonSpan value) && value.GetBool;
 
         /// <summary>
         /// Try to get the bool value of the object at path
@@ -963,9 +974,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) {
-            return this.TryGetKey(in key, out JsonSpan value) ? (@out = value.IsBool && value.GetBool) : (@out = false);
-        }
+        public bool TryGetBool(in ReadOnlySpan<char> key, out bool @out) => this.TryGetKey(in key, out JsonSpan value) ? (@out = value.IsBool && value.GetBool) : (@out = false);
 
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
@@ -990,6 +999,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
         public bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
             if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.DateTime, (long)this.Type)) {
                 @out = value.GetDateTime;
@@ -1762,10 +1772,10 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public readonly string ToString(ToStringFormat format) {
-            bool translateUnicode = HasFlag((long)format, (long)ToStringFormat.TranslateUnicode);
-            bool lowerCaseBool = HasFlag((long)format, (long)ToStringFormat.LowerCaseBool);
-            bool reparseNumbers = HasFlag((long)format, (long)ToStringFormat.ReParseNumbers);
+        public readonly string ToString(JsonToStringFormat format) {
+            bool translateUnicode = HasFlag((long)format, (long)JsonToStringFormat.TranslateUnicode);
+            bool lowerCaseBool = HasFlag((long)format, (long)JsonToStringFormat.LowerCaseBool);
+            bool reparseNumbers = HasFlag((long)format, (long)JsonToStringFormat.ReParseNumbers);
 
             if (this.IsString) {
                 if (this.Value.IsEmpty) {
@@ -1779,7 +1789,7 @@ namespace ScoredProductions.NanoJson {
                 }
             }
             else if (this.IsNull) {
-                if (HasFlag((long)format, (long)ToStringFormat.NullReturnsEmptyReference)) {
+                if (HasFlag((long)format, (long)JsonToStringFormat.NullReturnsEmptyReference)) {
                     return null;
                 }
                 else {
@@ -1803,8 +1813,8 @@ namespace ScoredProductions.NanoJson {
                 }
             }
 
-            bool pretty = HasFlag((long)format, (long)ToStringFormat.Pretty);
-            bool tabs = pretty && HasFlag((long)format, (long)ToStringFormat.TabCharacterIndent);
+            bool pretty = HasFlag((long)format, (long)JsonToStringFormat.Pretty);
+            bool tabs = pretty && HasFlag((long)format, (long)JsonToStringFormat.TabCharacterIndent);
             int tabLen = tabs ? 1 : INDENT_TABS.Length;
             int exactCapacity = Math.Max(1, this.GetSerializedLength(false, pretty, tabLen, translateUnicode, lowerCaseBool, reparseNumbers));
             return string.Create(exactCapacity, (this, pretty, tabs, translateUnicode, lowerCaseBool, reparseNumbers), (span, state) => {
@@ -2017,16 +2027,28 @@ namespace ScoredProductions.NanoJson {
         }
 
         /// <summary>
-        /// Get the literal string value of the object
+        /// Get the literal string value of the object (Allocates a new string)
         /// </summary>
-        public readonly string GetStringLiteral => this.Value.ToString();
+        public readonly string GetStringLiteral
+        {
+            get
+            {
+                return this.Value.ToString();
+            }
+        }
 
         public readonly int GetTranslatedUnicodeLength => GetStringDecodeLengthFromSpan(this.GetValueAsSpan);
 
         /// <summary>
-        /// Get the decoded string value of the object
+        /// Get the decoded string value of the object (Allocates a new string)
         /// </summary>
-        public readonly string GetStringDecoded => GetStringDecodedFromMemory(this.GetValueAsMemory);
+        public readonly string GetStringDecoded
+        {
+            get
+            {
+                return GetStringDecodedFromMemory(this.GetValueAsMemory);
+            }
+        }
 
         /// <summary>
         /// Try to get the string value of the object at path
@@ -2096,10 +2118,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Get the number contained inside This object
         /// </summary>
-        public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return double.TryParse(this.GetValueAsSpan, out double value) ? GetConvertedValue<T>(value) : default;
-        }
-
+        public readonly T GetNumberOfType<T>() where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => double.TryParse(this.GetValueAsSpan, out double value) ? GetConvertedValue<T>(value) : default;
 
         /// <summary>
         /// Try to get the numerical value of the object at path
@@ -2125,6 +2144,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
             if (this.TryGetKey(in key, out JsonMemory value) && value.IsNumber) {
                 return double.TryParse(value.GetValueAsSpan, out @out);
@@ -2140,23 +2160,20 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return this.TryGetNumber<T>(key.AsSpan());
-        }
+        public readonly T TryGetNumber<T>(string key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => this.TryGetNumber<T>(key.AsSpan());
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
-            return this.TryGetNumber(key.AsSpan(), out @out);
-        }
+        public readonly bool TryGetNumber<T>(string key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable => this.TryGetNumber(key.AsSpan(), out @out);
 
         /// <summary>
         /// Try to get the numerical value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             this.TryGetNumber(in key, out T value);
             return value;
@@ -2167,6 +2184,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             if (this.TryGetKey(in key, out JsonMemory value) && value.IsNumber) {
                 @out = value.GetNumberOfType<T>();
@@ -2257,6 +2275,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
             if (this.TryGetKey(in key, out JsonMemory value) && HasFlag((long)JsonType.DateTime, (long)value.Type)) {
                 @out = value.GetDateTime;
@@ -2315,9 +2334,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public readonly bool CompareKey(in ReadOnlySpan<char> key) {
-            return this.KeyHash == ComputeHash(key, out _);
-        }
+        public readonly bool CompareKey(in ReadOnlySpan<char> key) => this.KeyHash == ComputeHash(key, out _);
 
         /// <summary>
         /// Searchs the values for matching Key. Keys including seperators (e.g 'object.value') will start searching inside of subsiquent objects to find desired Key.
@@ -2330,6 +2347,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns>Key Found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool TryGetKey(in ReadOnlySpan<char> key, out JsonMemory found) {
             if (this.IsObject) {
                 int hash = ComputeHash(in key, out int pathLen);
@@ -2365,6 +2383,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns>Key reference</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly ref readonly JsonMemory TryGetKeyRef(ReadOnlySpan<char> key, out bool found) {
             if (this.IsObject) {
                 int hash = ComputeHash(in key, out int pathLen);
@@ -2399,13 +2418,11 @@ namespace ScoredProductions.NanoJson {
         public readonly ReadOnlySpan<JsonMemory>.Enumerator GetEnumerator() => this.GetInsideValuesAsSpan.GetEnumerator();
 
         public readonly override bool Equals(object obj) => obj is JsonMemory other && this.Equals(other);
-        public readonly bool Equals(JsonMemory other) {
-            return this.Type.Equals(other.Type)
+        public readonly bool Equals(JsonMemory other) => this.Type.Equals(other.Type)
               && this.ContainedValues.Equals(other.ContainedValues)
               && this.KeyHash == other.KeyHash
               && this.GetValueAsSpan.Equals(other.GetValueAsSpan, StringComparison.Ordinal)
               && this.ContainerLength == other.ContainerLength;
-        }
         public static bool operator ==(in JsonMemory left, in JsonMemory right) {
             return left.Equals(right);
         }
@@ -2414,9 +2431,7 @@ namespace ScoredProductions.NanoJson {
             return !(left == right);
         }
 
-        public readonly override int GetHashCode() {
-            return HashCode.Combine(this.Type, this.ContainedValues, this.Value, this.KeyHash, this.ContainerLength);
-        }
+        public readonly override int GetHashCode() => HashCode.Combine(this.Type, this.ContainedValues, this.Value, this.KeyHash, this.ContainerLength);
 
         public static implicit operator JsonMemory(in JsonSpan span) {
             return Pin(in span);
@@ -2434,16 +2449,12 @@ namespace ScoredProductions.NanoJson {
             return container.GetCopyOfInsideValues;
         }
 
-        public int CompareTo(JsonMemory other) {
-            return this.KeyHash.CompareTo(other.KeyHash);
-        }
+        public int CompareTo(JsonMemory other) => this.KeyHash.CompareTo(other.KeyHash);
 
         private readonly static JsonMemory Empty_Body = new JsonMemory(ReadOnlyMemory<char>.Empty);
         public static ref readonly JsonMemory Empty => ref Empty_Body;
 
-        public static JsonMemory ParseJson(string data) {
-            return ParseJson(data.AsMemory());
-        }
+        public static JsonMemory ParseJson(string data) => ParseJson(data.AsMemory());
 
         private static JsonMemory ParseJson(in ReadOnlyMemory<char> data) {
             if (data.Span.Trim().IsEmpty) {
@@ -2455,9 +2466,7 @@ namespace ScoredProductions.NanoJson {
             return parsed;
         }
 
-        public static bool TryParseJson(string data, out JsonMemory parsed) {
-            return TryParseJson(data.AsMemory(), out parsed);
-        }
+        public static bool TryParseJson(string data, out JsonMemory parsed) => TryParseJson(data.AsMemory(), out parsed);
 
         private static bool TryParseJson(in ReadOnlyMemory<char> data, out JsonMemory parsed) {
             try {
@@ -2473,9 +2482,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public static JsonMemory ParseJson(string key, string data) {
-            return ParseJson(key.AsMemory(), data.AsMemory());
-        }
+        public static JsonMemory ParseJson(string key, string data) => ParseJson(key.AsMemory(), data.AsMemory());
 
         private static JsonMemory ParseJson(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> data) {
             if (key.Span.Trim().IsEmpty) {
@@ -2495,9 +2502,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public static bool TryParseJson(string key, string data, out JsonMemory parsed) {
-            return TryParseJson(key.AsMemory(), data.AsMemory(), out parsed);
-        }
+        public static bool TryParseJson(string key, string data, out JsonMemory parsed) => TryParseJson(key.AsMemory(), data.AsMemory(), out parsed);
 
         private static bool TryParseJson(in ReadOnlyMemory<char> key, in ReadOnlyMemory<char> data, out JsonMemory parsed) {
             try {
@@ -2573,9 +2578,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public static JsonMemory CreateArray(string key, JsonMemory[] data, bool AllocateNewContainer = false) {
-            return CreateArray(key.AsMemory(), AllocateNewContainer ? (JsonMemory[])data.Clone() : data);
-        }
+        public static JsonMemory CreateArray(string key, JsonMemory[] data, bool AllocateNewContainer = false) => CreateArray(key.AsMemory(), AllocateNewContainer ? (JsonMemory[])data.Clone() : data);
 
         /// <param name="AllocateNewContainer">If a container should be rented and become eligible for Dispose</param>
         /// <param name="lengthRelevant">From 0, the length of elements relevent to the Json</param>
@@ -2613,9 +2616,7 @@ namespace ScoredProductions.NanoJson {
             return new JsonMemory(JsonType.Array, AllocateNewContainer, space, lengthRelevant);
         }
 
-        public static JsonMemory CreateObject(string key, JsonMemory[] data, bool AllocateNewContainer = false) {
-            return CreateObject(key.AsMemory(), data, AllocateNewContainer);
-        }
+        public static JsonMemory CreateObject(string key, JsonMemory[] data, bool AllocateNewContainer = false) => CreateObject(key.AsMemory(), data, AllocateNewContainer);
 
         /// <param name="AllocateNewContainer">If a container should be rented and become eligible for Dispose</param>
         /// <param name="lengthRelevant">From 0, the length of elements relevent to the Json</param>
@@ -2653,29 +2654,17 @@ namespace ScoredProductions.NanoJson {
             return new JsonMemory(JsonType.Object, AllocateNewContainer, space, lengthRelevant);
         }
 
-        public static JsonMemory CreateString(string data) {
-            return CreateString(ReadOnlyMemory<char>.Empty, data);
-        }
+        public static JsonMemory CreateString(string data) => CreateString(ReadOnlyMemory<char>.Empty, data);
 
-        public static JsonMemory CreateString(string key, string data) {
-            return CreateString(key.AsMemory(), data);
-        }
+        public static JsonMemory CreateString(string key, string data) => CreateString(key.AsMemory(), data);
 
-        private static JsonMemory CreateString(in ReadOnlyMemory<char> key, string data) {
-            return new JsonMemory(in key, in data);
-        }
+        private static JsonMemory CreateString(in ReadOnlyMemory<char> key, string data) => new JsonMemory(in key, in data);
 
-        public static JsonMemory CreateDateTime(in DateTime data) {
-            return CreateDateTime(ReadOnlyMemory<char>.Empty, in data);
-        }
+        public static JsonMemory CreateDateTime(in DateTime data) => CreateDateTime(ReadOnlyMemory<char>.Empty, in data);
 
-        public static JsonMemory CreateDateTime(string key, in DateTime data) {
-            return CreateDateTime(key.AsMemory(), in data);
-        }
+        public static JsonMemory CreateDateTime(string key, in DateTime data) => CreateDateTime(key.AsMemory(), in data);
 
-        private static JsonMemory CreateDateTime(in ReadOnlyMemory<char> key, in DateTime data) {
-            return new JsonMemory(in key, data.ToString("o"));
-        }
+        private static JsonMemory CreateDateTime(in ReadOnlyMemory<char> key, in DateTime data) => new JsonMemory(in key, data.ToString("o"));
 
         /// <summary>
         /// Take an existing value and assign its values to a new object with a new key
@@ -2683,9 +2672,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <param name="data"></param>
         /// <returns></returns>
-        public static JsonMemory AssignKeyToValue(string key, in JsonMemory data) {
-            return AssignKeyToValue(key.AsMemory(), in data);
-        }
+        public static JsonMemory AssignKeyToValue(string key, in JsonMemory data) => AssignKeyToValue(key.AsMemory(), in data);
 
         /// <summary>
         /// Take an existing value and assign its values to a new object with a new key
@@ -2693,45 +2680,25 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <param name="data"></param>
         /// <returns></returns>
-        private static JsonMemory AssignKeyToValue(in ReadOnlyMemory<char> key, in JsonMemory data) {
-            return new JsonMemory(in key, in data);
-        }
+        private static JsonMemory AssignKeyToValue(in ReadOnlyMemory<char> key, in JsonMemory data) => new JsonMemory(in key, in data);
 
-        public static JsonMemory CreateBool(bool data) {
-            return CreateBool(ReadOnlyMemory<char>.Empty, data);
-        }
+        public static JsonMemory CreateBool(bool data) => CreateBool(ReadOnlyMemory<char>.Empty, data);
 
-        public static JsonMemory CreateBool(string key, bool data) {
-            return CreateBool(key.AsMemory(), data);
-        }
+        public static JsonMemory CreateBool(string key, bool data) => CreateBool(key.AsMemory(), data);
 
-        private static JsonMemory CreateBool(in ReadOnlyMemory<char> key, bool data) {
-            return new JsonMemory(in key, data);
-        }
+        private static JsonMemory CreateBool(in ReadOnlyMemory<char> key, bool data) => new JsonMemory(in key, data);
 
-        public static JsonMemory CreateNumber(double data) {
-            return CreateNumber(ReadOnlyMemory<char>.Empty, data);
-        }
+        public static JsonMemory CreateNumber(double data) => CreateNumber(ReadOnlyMemory<char>.Empty, data);
 
-        public static JsonMemory CreateNumber(string key, double data) {
-            return CreateNumber(key.AsMemory(), data);
-        }
+        public static JsonMemory CreateNumber(string key, double data) => CreateNumber(key.AsMemory(), data);
 
-        private static JsonMemory CreateNumber(in ReadOnlyMemory<char> key, double data) {
-            return new JsonMemory(in key, data);
-        }
+        private static JsonMemory CreateNumber(in ReadOnlyMemory<char> key, double data) => new JsonMemory(in key, data);
 
-        public static ref readonly JsonMemory CreateNull() {
-            return ref Empty;
-        }
+        public static ref readonly JsonMemory CreateNull() => ref Empty;
 
-        public static JsonMemory CreateNull(string key) {
-            return CreateNull(key.AsMemory());
-        }
+        public static JsonMemory CreateNull(string key) => CreateNull(key.AsMemory());
 
-        private static JsonMemory CreateNull(in ReadOnlyMemory<char> key) {
-            return new JsonMemory(in key);
-        }
+        private static JsonMemory CreateNull(in ReadOnlyMemory<char> key) => new JsonMemory(in key);
 
     }
 
@@ -2793,19 +2760,13 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override readonly string ToString() {
-            return $"Reader: {{Source ..{ToStringSegmentLength}:: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - ToStringSegmentLength)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentChar)}'}}";
-        }
+        public override readonly string ToString() => $"Reader: {{Source ..{ToStringSegmentLength}:: {(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? (this.CurrentIndex < 0 ? "[Read index at Start]" : "[Read index at End]") : MemoryMarshal.Cast<ushort, char>(this.source[Math.Max(0, this.CurrentIndex - ToStringSegmentLength)..(this.CurrentIndex + 1)]).ToString())}, Pos: {this.CurrentIndex}, Char: '{(this.CurrentIndex < 0 || this.CurrentIndex > this.endIndex ? '\0' : this.CurrentChar)}'}}";
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly ReadOnlySpan<ushort> Slice(int index, int len) {
-            return this.source.Slice(index, len);
-        }
+        public readonly ReadOnlySpan<ushort> Slice(int index, int len) => this.source.Slice(index, len);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly ReadOnlySpan<char> SliceCast(int index, int len) {
-            return MemoryMarshal.Cast<ushort, char>(this.Slice(index, len));
-        }
+        public readonly ReadOnlySpan<char> SliceCast(int index, int len) => MemoryMarshal.Cast<ushort, char>(this.Slice(index, len));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Increment() {
@@ -2843,14 +2804,10 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetIndexToStart() {
-            this.CurrentIndex = -1;
-        }
+        public void SetIndexToStart() => this.CurrentIndex = -1;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetIndexToEnd() {
-            this.CurrentIndex = this.endIndex + 1;
-        }
+        public void SetIndexToEnd() => this.CurrentIndex = this.endIndex + 1;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool IsEscaped(int currentIndex) {
@@ -3733,7 +3690,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Format used by the basic <c>.ToString()</c>
         /// </summary>
-        public static ToStringFormat Default_ToStringFormat = ToStringFormat.Default;
+        public static JsonToStringFormat Default_ToStringFormat = JsonToStringFormat.Default;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T GetConvertedValue<T>(double value) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
@@ -3907,9 +3864,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="character"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsWhiteSpace(char character) {
-            return IsWhiteSpace((ushort)character);
-        }
+        public static bool IsWhiteSpace(char character) => IsWhiteSpace((ushort)character);
 
         /// <summary>
         /// Returns true if char value complies with <c>RFC 8259</c> for a whitespace character
@@ -3917,9 +3872,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="character"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsWhiteSpace(ushort character) {
-            return (JSONWHITESPACEMASK & (1UL << character)) != 0;
-        }
+        public static bool IsWhiteSpace(ushort character) => (JSONWHITESPACEMASK & (1UL << character)) != 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadHexNumber(char character) {
@@ -3971,9 +3924,7 @@ namespace ScoredProductions.NanoJson {
         /// <param name="right"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool HasFlag(long left, long right) {
-            return (left & right) > 0;
-        }
+        public static bool HasFlag(long left, long right) => (left & right) > 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double ParseNumber(in ReadOnlySpan<char> data) {
@@ -4214,19 +4165,13 @@ namespace ScoredProductions.NanoJson {
             private static readonly Lazy<JsonArrayPool> ContainerPool = new Lazy<JsonArrayPool>(() => new JsonArrayPool(knownMin, PoolMaxArrayLength, ArraysPerBucket));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static JsonMemory[] Rent(int length) {
-                return ContainerPool.Value.Rent(length);
-            }
+            public static JsonMemory[] Rent(int length) => ContainerPool.Value.Rent(length);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static void Return(JsonMemory[] array) {
-                ContainerPool.Value.Return(array, true);
-            }
+            public static void Return(JsonMemory[] array) => ContainerPool.Value.Return(array, true);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static void Return(JsonMemory[] array, bool clear) {
-                ContainerPool.Value.Return(array, clear);
-            }
+            public static void Return(JsonMemory[] array, bool clear) => ContainerPool.Value.Return(array, clear);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void EnsureBufferCapacity(int nextIndex, ref JsonMemory[] buffer) {
@@ -4304,9 +4249,7 @@ namespace ScoredProductions.NanoJson {
                 }
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                public void Return(JsonMemory[] array) {
-                    this.Return(array, true);
-                }
+                public void Return(JsonMemory[] array) => this.Return(array, true);
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public override void Return(JsonMemory[] array, bool clearArray = false) {
@@ -4405,7 +4348,7 @@ namespace ScoredProductions.NanoJson {
     #region ### ToStringFormat ###
 
     [Serializable, Flags]
-    public enum ToStringFormat : long {
+    public enum JsonToStringFormat : long {
         None = 0,
         Pretty = 0x1,
         /// <summary>
@@ -4513,25 +4456,15 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        public static JsonMemory AsJsonMemory(this string str) {
-            return JsonMemory.CreateString(str);
-        }
+        public static JsonMemory AsJsonMemory(this string str) => JsonMemory.CreateString(str);
 
-        public static JsonSpan AsJsonSpan(this string str) {
-            return new JsonSpan(str);
-        }
+        public static JsonSpan AsJsonSpan(this string str) => new JsonSpan(str);
 
-        public static JsonMemory AsJsonMemory(this double number) {
-            return JsonMemory.CreateNumber(number);
-        }
+        public static JsonMemory AsJsonMemory(this double number) => JsonMemory.CreateNumber(number);
 
-        public static JsonMemory AsJsonMemory(this bool b) {
-            return JsonMemory.CreateBool(b);
-        }
+        public static JsonMemory AsJsonMemory(this bool b) => JsonMemory.CreateBool(b);
 
-        public static JsonMemory ParseJson(this string json) {
-            return JsonMemory.ParseJson(json);
-        }
+        public static JsonMemory ParseJson(this string json) => JsonMemory.ParseJson(json);
     }
     #endregion
 }
