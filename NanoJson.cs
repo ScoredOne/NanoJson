@@ -122,7 +122,6 @@ namespace ScoredProductions.NanoJson {
         /// <param name="key"></param>
         /// <param name="reader"></param>
         /// <exception cref="ArgumentException"></exception>
-        [MethodImpl(MethodImplOptions.Synchronized)]
         private JsonSpan(in ReadOnlySpan<char> key, ref JsonReader reader, bool continuous) {
             this.currentKey = ReadOnlySpan<char>.Empty;
             this.currentValue = ReadOnlySpan<char>.Empty;
@@ -364,7 +363,6 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        [MethodImpl(MethodImplOptions.Synchronized)]
         public bool MoveNext() {
             if (this.IsObject) {
                 ref JsonReader providedReader = ref this.reader;
@@ -437,7 +435,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Resets the Enumeration search
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset() {
             this.currentIsEmpty = false;
             this.currentType = 0;
@@ -453,7 +451,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetIndex(in int index, out JsonSpan value) {
             if (index < 0) {
                 throw new ArgumentOutOfRangeException(nameof(index));
@@ -496,7 +494,7 @@ namespace ScoredProductions.NanoJson {
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetKey(in ReadOnlySpan<char> key, out JsonSpan value) {
             if (key.IsEmpty) {
                 throw new ArgumentOutOfRangeException(nameof(key));
@@ -555,7 +553,7 @@ namespace ScoredProductions.NanoJson {
             return false;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public JsonSpan GetEnumerator() {
             this.Reset();
             return this;
@@ -603,13 +601,13 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(in key, out JsonSpan value) && value.IsString? (decoded? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
+        public string TryGetString(in ReadOnlySpan<char> key, bool decoded = true) => this.TryGetKey(in key, out JsonSpan value) && value.IsString ? (decoded ? value.GetStringDecoded : value.GetStringLiteral) : string.Empty;
         /// <summary>
         /// Try to get the string value of the object at path
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetString(in ReadOnlySpan<char> key, out string @out, bool decoded = true) {
             if (this.TryGetKey(key, out JsonSpan value) && value.IsString) {
                 @out = decoded ? value.GetStringDecoded : value.GetStringLiteral;
@@ -905,7 +903,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetNumber(in ReadOnlySpan<char> key, out double @out) {
             if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 return double.TryParse(value.Value, out @out);
@@ -934,7 +932,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T TryGetNumber<T>(in ReadOnlySpan<char> key) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             this.TryGetNumber(in key, out T value);
             return value;
@@ -944,7 +942,7 @@ namespace ScoredProductions.NanoJson {
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetNumber<T>(in ReadOnlySpan<char> key, out T @out) where T : struct, IComparable, IComparable<T>, IConvertible, IEquatable<T>, IFormattable {
             if (this.TryGetKey(in key, out JsonSpan value) && value.IsNumber) {
                 @out = value.GetNumberOfType<T>();
@@ -1005,7 +1003,7 @@ namespace ScoredProductions.NanoJson {
         /// <summary>
         /// Gets this value as a System.DateTime using TryParse
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetDateTime(in ReadOnlySpan<char> key, out DateTime @out) {
             if (this.TryGetKey(in key, out JsonSpan value) && HasFlag((long)JsonType.DateTime, (long)this.Type)) {
                 @out = value.GetDateTime;
@@ -3516,7 +3514,7 @@ namespace ScoredProductions.NanoJson {
                     return this.CurrentValue;
                 }
             }
-
+            
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
@@ -4284,24 +4282,26 @@ namespace ScoredProductions.NanoJson {
                     }
                 }
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void UpdateBucketLimit(int newBucketLimit) {
-                    this.arraysPerBucket = newBucketLimit < 1 ? 1 : newBucketLimit;
-                    int bound = this.lowerBound;
-                    do {
-                        if (this.Buckets.TryGetValue(bound, out ConcurrentQueue<JsonMemory[]> queue)) {
-                            while (queue.Count > this.arraysPerBucket) {
-                                queue.TryDequeue(out _);
+                    lock (this.Buckets) {
+                        this.arraysPerBucket = newBucketLimit < 1 ? 1 : newBucketLimit;
+                        int bound = this.lowerBound;
+                        do {
+                            if (this.Buckets.TryGetValue(bound, out ConcurrentQueue<JsonMemory[]> queue)) {
+                                while (queue.Count > this.arraysPerBucket) {
+                                    queue.TryDequeue(out _);
+                                }
                             }
-                        }
-                        else {
-                            this.Buckets.TryAdd(bound, new ConcurrentQueue<JsonMemory[]>());
-                        }
-                        bound <<= 1;
-                    } while (bound <= this.upperBound);
+                            else {
+                                this.Buckets.TryAdd(bound, new ConcurrentQueue<JsonMemory[]>());
+                            }
+                            bound <<= 1;
+                        } while (bound <= this.upperBound);
+                    }
                 }
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void UpdateLowerBound(int newLower) {
                     if (newLower < 1) {
                         throw new ArgumentOutOfRangeException(nameof(newLower), "Lower bound must be greater than 0");
@@ -4313,22 +4313,24 @@ namespace ScoredProductions.NanoJson {
                     if (newLower == this.lowerBound) {
                         return;
                     }
-                    bool shrink = newLower > this.lowerBound;
-                    if (shrink) {
-                        do {
-                            this.Buckets.TryRemove(this.lowerBound, out _);
-                            this.lowerBound <<= 1;
-                        } while (this.lowerBound < newLower);
-                    }
-                    else {
-                        while (this.lowerBound >= newLower) {
-                            this.lowerBound >>= 1;
-                            this.Buckets.TryAdd(this.lowerBound, new ConcurrentQueue<JsonMemory[]>());
+                    lock (this.Buckets) {
+                        bool shrink = newLower > this.lowerBound;
+                        if (shrink) {
+                            do {
+                                this.Buckets.TryRemove(this.lowerBound, out _);
+                                this.lowerBound <<= 1;
+                            } while (this.lowerBound < newLower);
+                        }
+                        else {
+                            while (this.lowerBound >= newLower) {
+                                this.lowerBound >>= 1;
+                                this.Buckets.TryAdd(this.lowerBound, new ConcurrentQueue<JsonMemory[]>());
+                            }
                         }
                     }
                 }
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.Synchronized)]
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void UpdateUpperBound(int newUpper) {
                     if (newUpper < this.lowerBound) {
                         throw new ArgumentOutOfRangeException(nameof(newUpper), "Upper bound must be greater than or equal to lower bound");
@@ -4337,17 +4339,19 @@ namespace ScoredProductions.NanoJson {
                     if (newUpper == this.upperBound) {
                         return;
                     }
-                    bool shrink = newUpper < this.upperBound;
-                    if (shrink) {
-                        do {
-                            this.Buckets.TryRemove(this.upperBound, out _);
-                            this.upperBound <<= 1;
-                        } while (this.upperBound < newUpper);
-                    }
-                    else {
-                        while (this.upperBound >= newUpper) {
-                            this.upperBound >>= 1;
-                            this.Buckets.TryAdd(this.upperBound, new ConcurrentQueue<JsonMemory[]>());
+                    lock (this.Buckets) {
+                        bool shrink = newUpper < this.upperBound;
+                        if (shrink) {
+                            do {
+                                this.Buckets.TryRemove(this.upperBound, out _);
+                                this.upperBound >>= 1;
+                            } while (this.upperBound > newUpper);
+                        }
+                        else {
+                            while (this.upperBound <= newUpper) {
+                                this.upperBound <<= 1;
+                                this.Buckets.TryAdd(this.upperBound, new ConcurrentQueue<JsonMemory[]>());
+                            }
                         }
                     }
                 }
