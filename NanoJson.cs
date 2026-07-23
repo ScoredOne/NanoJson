@@ -332,12 +332,11 @@ namespace ScoredProductions.NanoJson {
         public bool MoveNext() {
             if (this.IsObject) {
                 ref JsonReader providedReader = ref this.reader;
-                if (!providedReader.CanAdvance) {
+                if (!providedReader.Increment()) {
                     this.currentKey = ReadOnlySpan<char>.Empty;
                     this.currentValue = ReadOnlySpan<char>.Empty;
                     return false;
                 }
-                providedReader.AdvanceToNotWhiteSpace();
                 if (providedReader.CurrentValue != QUOTE) {
                     providedReader.AdvanceTo(QUOTE);
                 }
@@ -641,8 +640,6 @@ namespace ScoredProductions.NanoJson {
             ArrayPool<char>.Shared.Return(buffer);
             return builtString;
         }
-
-        // Change to a reader recursive pattern, no object creation or enumeration, detect type, write, if obj or array, loop detecting colons, find position and perform copy
 
         /// <summary>
         /// Recursive method to build the json ToString output
