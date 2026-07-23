@@ -18,6 +18,7 @@
 
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -2736,9 +2737,13 @@ namespace ScoredProductions.NanoJson {
             for (int x = 0; x < vectorLen; x++) {
                 Vector<ushort> eq = Vector.Equals(vectorData[x], search);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] > 0) {
-                            return this.CurrentIndex += (x * Segment) + y;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                            if ((ushort)chunk > 0) {
+                                return this.CurrentIndex += (x * Segment) + (y * 4) + z;
+                            }
                         }
                     }
                 }
@@ -2769,9 +2774,13 @@ namespace ScoredProductions.NanoJson {
             for (int x = 0; x < vectorLen; x++) {
                 Vector<ushort> eq = Vector.Equals(vectorData[x], search);
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] == 0) {
-                            return this.CurrentIndex += (x * Segment) + y;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                return this.CurrentIndex += (x * Segment) + (y * 4) + z;
+                            }
                         }
                     }
                 }
@@ -2809,10 +2818,14 @@ namespace ScoredProductions.NanoJson {
                     eq |= Vector.Equals(current, searchVectors[y]);
                 }
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] == 0) {
-                            this.CurrentIndex += (x * Segment) + y;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                            if ((ushort)chunk > 0) {
+                                this.CurrentIndex += (x * Segment) + (y * 4) + z;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
@@ -2848,10 +2861,14 @@ namespace ScoredProductions.NanoJson {
                     eq |= Vector.Equals(current, searchVectors[y]);
                 }
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] == 0) {
-                            this.CurrentIndex += (x * Segment) + y;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                this.CurrentIndex += (x * Segment) + (y * 4) + z;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
@@ -2878,13 +2895,17 @@ namespace ScoredProductions.NanoJson {
             for (int x = 0; x < vectorLen; x++) {
                 Vector<ushort> eq = Vector.LessThan(vectorData[x], searchVector);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] > 0) {
-                            int target = this.CurrentIndex + (x * Segment) + y;
-                            ushort c = this.source[target];
-                            if (IsWhiteSpace(c)) {
-                                this.CurrentIndex = target;
-                                return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                            if ((ushort)chunk > 0) {
+                                int target = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                ushort c = this.source[target];
+                                if (IsWhiteSpace(c)) {
+                                    this.CurrentIndex = target;
+                                    return this.CurrentValue;
+                                }
                             }
                         }
                     }
@@ -2913,13 +2934,17 @@ namespace ScoredProductions.NanoJson {
             for (int x = 0; x < vectorLen; x++) {
                 Vector<ushort> eq = Vector.LessThan(vectorData[x], searchVector);
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] == 0) {
-                            int target = this.CurrentIndex + (x * Segment) + y;
-                            ushort c = this.source[target];
-                            if (!IsWhiteSpace(c)) {
-                                this.CurrentIndex = target;
-                                return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                int target = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                ushort c = this.source[target];
+                                if (!IsWhiteSpace(c)) {
+                                    this.CurrentIndex = target;
+                                    return this.CurrentValue;
+                                }
                             }
                         }
                     }
@@ -2948,13 +2973,17 @@ namespace ScoredProductions.NanoJson {
             for (int x = 0; x < vectorLen; x++) {
                 Vector<ushort> eq = Vector.Equals(vectorData[x], quote);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] > 0) {
-                            int t = this.CurrentIndex + (x * Segment) + y;
-                            if (this.IsEscaped(t)) {
-                                continue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                            if ((ushort)chunk > 0) {
+                                int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                if (this.IsEscaped(t)) {
+                                    continue;
+                                }
+                                return this.CurrentIndex = t;
                             }
-                            return this.CurrentIndex = t;
                         }
                     }
                 }
@@ -2992,13 +3021,17 @@ namespace ScoredProductions.NanoJson {
                     | Vector.Equals(current, rbracketVector)
                     | Vector.Equals(current, rbraceVector);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int y = 0; y < Segment; y++) {
-                        if (eq[y] > 0) {
-                            int target = this.CurrentIndex + (x * Segment) + y;
-                            ushort c = this.source[target];
-                            if (c == COMMA || IsWhiteSpace(c) || c == RBRACE || c == RBRACKET) {
-                                this.CurrentIndex = target;
-                                return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = 0; y < bitInterpritation.Length; y++) {
+                        ulong chunk = bitInterpritation[y];
+                        for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                            if ((ushort)chunk > 0) {
+                                int target = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                ushort c = this.source[target];
+                                if (c == COMMA || IsWhiteSpace(c) || c == RBRACE || c == RBRACKET) {
+                                    this.CurrentIndex = target;
+                                    return this.CurrentValue;
+                                }
                             }
                         }
                     }
@@ -3040,15 +3073,19 @@ namespace ScoredProductions.NanoJson {
                     ref readonly Vector<ushort> current = ref vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                        for (int y = 0; y < Segment; y++) {
-                            if (eq[y] > 0) {
-                                WithinQuotes = false;
-                                int t = this.CurrentIndex + (x * Segment) + y;
-                                if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
-                                    continue;
+                        ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                        for (int y = 0; y < bitInterpritation.Length; y++) {
+                            ulong chunk = bitInterpritation[y];
+                            for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                                if ((ushort)chunk > 0) {
+                                    WithinQuotes = false;
+                                    int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                    if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
+                                        continue;
+                                    }
+                                    this.CurrentIndex = t + 1;
+                                    goto Rebuild;
                                 }
-                                this.CurrentIndex = t + 1;
-                                goto Rebuild;
                             }
                         }
                     }
@@ -3063,31 +3100,36 @@ namespace ScoredProductions.NanoJson {
                         | Vector.Equals(current, lbraceVector)
                         | Vector.Equals(current, rbraceVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                        for (int y = 0; y < Segment; y++) {
-                            if (eq[y] > 0) {
-                                int target = this.CurrentIndex + (x * Segment) + y;
-                                ushort ch = this.source[target];
-                                switch (ch) {
-                                    case QUOTE: {
-                                        WithinQuotes = true;
-                                        this.CurrentIndex = target + 1;
-                                        goto Rebuild;
-                                    }
-                                    case LBRACE:
-                                    case LBRACKET: {
-                                        debth++;
-                                        break;
-                                    }
-                                    case RBRACKET: {
-                                        debth--;
-                                        break;
-                                    }
-                                    case RBRACE: {
-                                        if (--debth == 0) {
-                                            this.CurrentIndex = target;
-                                            return this.CurrentValue;
+                        ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                        for (int y = 0; y < bitInterpritation.Length; y++) {
+                            ulong chunk = bitInterpritation[y];
+                            for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                                if ((ushort)chunk > 0) {
+                                    WithinQuotes = false;
+                                    int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                    ushort ch = this.source[t];
+                                    switch (ch) {
+                                        case QUOTE: {
+                                            WithinQuotes = true;
+                                            this.CurrentIndex = t + 1;
+                                            goto Rebuild;
                                         }
-                                        break;
+                                        case LBRACE:
+                                        case LBRACKET: {
+                                            debth++;
+                                            break;
+                                        }
+                                        case RBRACKET: {
+                                            debth--;
+                                            break;
+                                        }
+                                        case RBRACE: {
+                                            if (--debth == 0) {
+                                                this.CurrentIndex = t;
+                                                return this.CurrentValue;
+                                            }
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -3156,15 +3198,19 @@ namespace ScoredProductions.NanoJson {
                     ref readonly Vector<ushort> current = ref vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                        for (int y = 0; y < Segment; y++) {
-                            if (eq[y] > 0) {
-                                WithinQuotes = false;
-                                int t = this.CurrentIndex + (x * Segment) + y;
-                                if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
-                                    continue;
+                        ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                        for (int y = 0; y < bitInterpritation.Length; y++) {
+                            ulong chunk = bitInterpritation[y];
+                            for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                                if ((ushort)chunk > 0) {
+                                    WithinQuotes = false;
+                                    int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                    if (this.IsEscaped(t)) { // consideration of inside quote backslash (\")
+                                        continue;
+                                    }
+                                    this.CurrentIndex = t + 1;
+                                    goto Rebuild;
                                 }
-                                this.CurrentIndex = t + 1;
-                                goto Rebuild;
                             }
                         }
                     }
@@ -3179,31 +3225,36 @@ namespace ScoredProductions.NanoJson {
                         | Vector.Equals(current, lbraceVector)
                         | Vector.Equals(current, rbraceVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                        for (int y = 0; y < Segment; y++) {
-                            if (eq[y] > 0) {
-                                int target = this.CurrentIndex + (x * Segment) + y;
-                                ushort ch = this.source[target];
-                                switch (ch) {
-                                    case QUOTE: {
-                                        WithinQuotes = true;
-                                        this.CurrentIndex = target + 1;
-                                        goto Rebuild;
-                                    }
-                                    case LBRACE:
-                                    case LBRACKET: {
-                                        debth++;
-                                        break;
-                                    }
-                                    case RBRACE: {
-                                        debth--;
-                                        break;
-                                    }
-                                    case RBRACKET: {
-                                        if (--debth == 0) {
-                                            this.CurrentIndex = target;
-                                            return this.CurrentValue;
+                        ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                        for (int y = 0; y < bitInterpritation.Length; y++) {
+                            ulong chunk = bitInterpritation[y];
+                            for (int z = 0; chunk > 0; chunk >>= 16, z++) {
+                                if ((ushort)chunk > 0) {
+                                    WithinQuotes = false;
+                                    int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                    ushort ch = this.source[t];
+                                    switch (ch) {
+                                        case QUOTE: {
+                                            WithinQuotes = true;
+                                            this.CurrentIndex = t + 1;
+                                            goto Rebuild;
                                         }
-                                        break;
+                                        case LBRACE:
+                                        case LBRACKET: {
+                                            debth++;
+                                            break;
+                                        }
+                                        case RBRACE: {
+                                            debth--;
+                                            break;
+                                        }
+                                        case RBRACKET: {
+                                            if (--debth == 0) {
+                                                this.CurrentIndex = t;
+                                                return this.CurrentValue;
+                                            }
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -3290,9 +3341,13 @@ namespace ScoredProductions.NanoJson {
                 Vector<ushort> current = translated[x];
                 Vector<ushort> eq = Vector.Equals(current, searchVector);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] > 0) {
-                            return this.CurrentIndex = (x * Segment) + i;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 3; chunk > 0; chunk >>= 16, z--) {
+                            if ((ushort)chunk > 0) {
+                                return this.CurrentIndex = (x * Segment) + (y * 4) + z;
+                            }
                         }
                     }
                 }
@@ -3327,9 +3382,13 @@ namespace ScoredProductions.NanoJson {
                 Vector<ushort> current = translated[x];
                 Vector<ushort> eq = Vector.Equals(current, searchVector);
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] == 0) {
-                            return this.CurrentIndex = (x * Segment) + i;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                return this.CurrentIndex = (x * Segment) + (y * 4) + z;
+                            }
                         }
                     }
                 }
@@ -3367,10 +3426,14 @@ namespace ScoredProductions.NanoJson {
                     eq = Vector.BitwiseOr(eq, Vector.Equals(current, searchVector[i]));
                 }
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] > 0) {
-                            this.CurrentIndex = (x * Segment) + i;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 3; chunk > 0; chunk >>= 16, z--) {
+                            if ((ushort)chunk > 0) {
+                                this.CurrentIndex = (x * Segment) + (y * 4) + z;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
@@ -3394,7 +3457,7 @@ namespace ScoredProductions.NanoJson {
                     return this.CurrentValue;
                 }
             }
-            
+
             Span<Vector<ushort>> searchVector = stackalloc Vector<ushort>[searchLen];
             for (int i = 0; i < searchLen; i++) {
                 searchVector[i] = new Vector<ushort>(search[i]);
@@ -3408,10 +3471,14 @@ namespace ScoredProductions.NanoJson {
                     eq = Vector.BitwiseOr(eq, Vector.Equals(current, searchVector[i]));
                 }
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] == 0) {
-                            this.CurrentIndex = (x * Segment) + i;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                this.CurrentIndex = (x * Segment) + (y * 4) + z;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
@@ -3444,16 +3511,19 @@ namespace ScoredProductions.NanoJson {
             ReadOnlySpan<Vector<ushort>> translated = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(0, remTarget));
 
             for (int x = translated.Length - 1; x >= 0; x--) {
-                Vector<ushort> current = translated[x];
-                Vector<ushort> eq = Vector.Equals(current, searchVector);
+                Vector<ushort> eq = Vector.Equals(translated[x], searchVector);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] > 0) {
-                            int t = this.CurrentIndex + (x * Segment) + i;
-                            if (this.IsEscaped(t)) {
-                                continue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 3; chunk > 0; chunk >>= 16, z--) {
+                            if ((ushort)chunk > 0) {
+                                int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                if (this.IsEscaped(t)) {
+                                    continue;
+                                }
+                                return this.CurrentIndex = t;
                             }
-                            return this.CurrentIndex = t;
                         }
                     }
                 }
@@ -3484,10 +3554,18 @@ namespace ScoredProductions.NanoJson {
                 Vector<ushort> current = translated[x];
                 Vector<ushort> eq = Vector.LessThan(current, searchVector);
                 if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] > 0 && IsWhiteSpace(this.source[i + this.CurrentIndex])) {
-                            this.CurrentIndex = (x * Segment) + i;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 3; chunk > 0; chunk >>= 16, z--) {
+                            if ((ushort)chunk > 0) {
+                                int t = this.CurrentIndex + (x * Segment) + (y * 4) + z;
+                                if (!IsWhiteSpace(this.source[t])) {
+                                    continue;
+                                }
+                                this.CurrentIndex = t;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
@@ -3518,10 +3596,18 @@ namespace ScoredProductions.NanoJson {
                 Vector<ushort> current = translated[x];
                 Vector<ushort> eq = Vector.LessThan(current, searchVector);
                 if (Vector.EqualsAny(eq, Vector<ushort>.Zero)) {
-                    for (int i = segmentMinus; i >= 0; i--) {
-                        if (eq[i] == 0 && !IsWhiteSpace(this.source[i + this.CurrentIndex])) {
-                            this.CurrentIndex = (x * Segment) + i;
-                            return this.CurrentValue;
+                    ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
+                    for (int y = bitInterpritation.Length - 1; y >= 0; y--) {
+                        ulong chunk = BinaryPrimitives.ReverseEndianness(bitInterpritation[y]);
+                        for (int z = 0; z < 4; chunk >>= 16, z++) {
+                            if ((ushort)chunk == 0) {
+                                int t = (x * Segment) + (y * 4) + z;
+                                if (IsWhiteSpace(this.source[t])) {
+                                    continue;
+                                }
+                                this.CurrentIndex = t;
+                                return this.CurrentValue;
+                            }
                         }
                     }
                 }
