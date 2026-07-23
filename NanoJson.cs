@@ -215,8 +215,7 @@ namespace ScoredProductions.NanoJson {
                     else {
                         right = reader.CurrentIndex - left + 1;
                     }
-                    ReadOnlySpan<ushort> container = reader.Slice(left, right);
-                    value = MemoryMarshal.Cast<ushort, char>(container);
+                    value = reader.SliceCast(left, right);
                     return true;
                 }
                 case LBRACE: {
@@ -246,8 +245,7 @@ namespace ScoredProductions.NanoJson {
                     else {
                         right = reader.CurrentIndex - left + 1;
                     }
-                    ReadOnlySpan<ushort> container = reader.Slice(left, right);
-                    value = MemoryMarshal.Cast<ushort, char>(container);
+                    value = reader.SliceCast(left, right);
                     return true;
                 }
                 case N_LOWER:
@@ -259,18 +257,8 @@ namespace ScoredProductions.NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
 
-                    if (right == 4) {
-                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
-                        ushort c = data[1];
-                        if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                            c = data[2];
-                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                c = data[3];
-                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                    return true;
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(value, StringComparison.OrdinalIgnoreCase)) {
+                        return true;
                     }
 
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
@@ -284,18 +272,8 @@ namespace ScoredProductions.NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
 
-                    if (right == 4) {
-                        ReadOnlySpan<ushort> toCompare = reader.Slice(left, right);
-                        ushort c = toCompare[1];
-                        if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
-                            c = toCompare[2];
-                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                c = toCompare[3];
-                                if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                    return true;
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(value, StringComparison.OrdinalIgnoreCase)) {
+                        return true;
                     }
 
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
@@ -309,21 +287,8 @@ namespace ScoredProductions.NanoJson {
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
 
-                    if (right == 5) {
-                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
-                        ushort c = data[1];
-                        if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
-                            c = data[2];
-                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                c = data[3];
-                                if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
-                                    c = data[4];
-                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(value, StringComparison.OrdinalIgnoreCase)) {
+                        return true;
                     }
 
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), type)}, {reader.ToString()}, TryParse: {value.ToString()})", nameof(value));
@@ -334,7 +299,7 @@ namespace ScoredProductions.NanoJson {
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
-                    value = MemoryMarshal.Cast<ushort, char>(reader.Slice(left, right));
+                    value = reader.SliceCast(left, right);
 
                     if (IsNumber(value)) {
                         return true;
@@ -675,6 +640,8 @@ namespace ScoredProductions.NanoJson {
             ArrayPool<char>.Shared.Return(buffer);
             return builtString;
         }
+
+        // Change to a reader recursive pattern, no object creation or enumeration, detect type, write, if obj or array, loop detecting colons, find position and perform copy
 
         /// <summary>
         /// Recursive method to build the json ToString output
@@ -1128,55 +1095,28 @@ namespace ScoredProductions.NanoJson {
                                 switch (leftChar) {
                                     case N_LOWER:
                                     case N_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 4) {
-                                            char c = data[left + 1];
-                                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                        existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Null, NULL.AsMemory());
-                                                        break;
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = NULL.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Null, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 4) {
-                                            char c = data[left + 1];
-                                            if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                        existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.TrueString.AsMemory());
-                                                        break;
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = bool.TrueString.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 5) {
-                                            char c = data[left + 1];
-                                            if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
-                                                        c = data[left + 4];
-                                                        if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, bool.FalseString.AsMemory());
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = bool.FalseString.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(ReadOnlyMemory<char>.Empty, JsonType.Boolean, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
@@ -1286,55 +1226,28 @@ namespace ScoredProductions.NanoJson {
                                 switch (leftChar) {
                                     case N_LOWER:
                                     case N_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 4) {
-                                            char c = data[left + 1];
-                                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                        existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Null, NULL.AsMemory());
-                                                        break;
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = NULL.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Null, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case T_LOWER:
                                     case T_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 4) {
-                                            char c = data[left + 1];
-                                            if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                        existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.TrueString.AsMemory());
-                                                        break;
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = bool.TrueString.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
                                     case F_LOWER:
                                     case F_UPPER: {
-                                        if ((reader.CurrentIndex - left) == 5) {
-                                            char c = data[left + 1];
-                                            if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
-                                                c = data[left + 2];
-                                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                                    c = data[left + 3];
-                                                    if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
-                                                        c = data[left + 4];
-                                                        if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, bool.FalseString.AsMemory());
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        ReadOnlyMemory<char> comp = bool.FalseString.AsMemory();
+                                        if (reader.SliceCast(left, reader.CurrentIndex - left).Equals(comp.Span, StringComparison.OrdinalIgnoreCase)) {
+                                            existingBuffer[bufPos++] = new JsonMemory(reference.Slice(nameL, nameR), JsonType.Boolean, comp);
+                                            break;
                                         }
                                         throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                                     }
@@ -1380,18 +1293,8 @@ namespace ScoredProductions.NanoJson {
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
-                    if (right == 4) {
-                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
-                        ushort c = data[1];
-                        if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                            c = data[2];
-                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                c = data[3];
-                                if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                    return;
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(this.Value.Span, StringComparison.OrdinalIgnoreCase)) {
+                        return;
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
@@ -1405,18 +1308,8 @@ namespace ScoredProductions.NanoJson {
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
-                    if (right == 4) {
-                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
-                        ushort c = data[1];
-                        if ((c ^ R_LOWER) == 0 || (c ^ R_UPPER) == 0) {
-                            c = data[2];
-                            if ((c ^ U_LOWER) == 0 || (c ^ U_UPPER) == 0) {
-                                c = data[3];
-                                if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                    return;
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(this.Value.Span, StringComparison.OrdinalIgnoreCase)) {
+                        return;
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
@@ -1430,21 +1323,8 @@ namespace ScoredProductions.NanoJson {
                     int left = reader.CurrentIndex;
                     reader.AdvanceToValueEnding();
                     int right = reader.CanAdvance ? (reader.CurrentIndex - left) : (reader.CurrentIndex - left + 1);
-                    if (right == 5) {
-                        ReadOnlySpan<ushort> data = reader.Slice(left, right);
-                        ushort c = data[1];
-                        if ((c ^ A_LOWER) == 0 || (c ^ A_UPPER) == 0) {
-                            c = data[2];
-                            if ((c ^ L_LOWER) == 0 || (c ^ L_UPPER) == 0) {
-                                c = data[3];
-                                if ((c ^ S_LOWER) == 0 || (c ^ S_UPPER) == 0) {
-                                    c = data[4];
-                                    if ((c ^ E_LOWER) == 0 || (c ^ E_UPPER) == 0) {
-                                        return;
-                                    }
-                                }
-                            }
-                        }
+                    if (reader.SliceCast(left, right).Equals(this.Value.Span, StringComparison.OrdinalIgnoreCase)) {
+                        return;
                     }
                     throw new ArgumentException($"Parse failed (JsonType: {Enum.GetName(typeof(JsonType), this.Type)}, {reader.ToString()}, TryParse: {reference.ToString()})", nameof(reference));
                 }
