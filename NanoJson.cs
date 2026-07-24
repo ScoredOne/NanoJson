@@ -3657,6 +3657,11 @@ namespace ScoredProductions.NanoJson {
         internal const ushort S_LOWER = 's';
         internal const ushort S_UPPER = 'S';
         internal const ushort BACKSLASH = '\\';
+        internal const ushort ZERO = '0';
+        internal const ushort NINE = '9';
+        internal const ushort PLUS = '+';
+        internal const ushort MINUS = '-';
+        internal const ushort STOP = '.';
 
         public const ulong JSONWHITESPACEMASK = (1UL << 9) | (1UL << 10) | (1UL << 13) | (1UL << 32);
 
@@ -3849,35 +3854,24 @@ namespace ScoredProductions.NanoJson {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadHexNumber(char character) {
-            switch (character) {
-                case '0':
-                case '1':
-                case '2':
-                case '3':
-                case '4':
-                case '5':
-                case '6':
-                case '7':
-                case '8':
-                case '9':
-                    return character - 48;
-                case 'A':
-                case 'B':
-                case 'C':
-                case 'D':
-                case 'E':
-                case 'F':
-                    return character - 55;
-                case 'a':
-                case 'b':
-                case 'c':
-                case 'd':
-                case 'e':
-                case 'f':
-                    return character - 87;
-                default:
-                    throw new FormatException(nameof(character));
+            if (character >= ZERO && character <= NINE) {
+                return character - 48;
             }
+            else if (character >= A_UPPER && character <= F_UPPER) {
+                return character - 55;
+            }
+            else if (character >= A_LOWER && character <= F_LOWER) {
+                return character - 87;
+            }
+            throw new FormatException(nameof(character));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int ReadNumber(char character) {
+            if (character >= ZERO && character <= NINE) {
+                return character - 48;
+            }
+            throw new FormatException(nameof(character));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3908,8 +3902,8 @@ namespace ScoredProductions.NanoJson {
 
                 // handle sign
                 char c = data[pos];
-                bool negative = c == '-';
-                if (negative || c == '+') {
+                bool negative = c == MINUS;
+                if (negative || c == PLUS) {
                     pos++;
                 }
 
@@ -3917,7 +3911,7 @@ namespace ScoredProductions.NanoJson {
                 int eIndex = -1;
                 for (int x = pos; x < len; x++) {
                     c = data[x];
-                    if (c == 'e' || c == 'E') {
+                    if (c == E_LOWER || c == E_UPPER) {
                         eIndex = x;
                         break;
                     }
@@ -3936,7 +3930,7 @@ namespace ScoredProductions.NanoJson {
                         seenDecimal = true;
                         continue;
                     }
-                    int digit = ReadHexNumber(c); // expects '0' to '9'
+                    int digit = ReadNumber(c); // expects '0' to '9'
                     if (!seenDecimal) {
                         value = value * 10.0 + digit;
                     }
@@ -3952,14 +3946,14 @@ namespace ScoredProductions.NanoJson {
                     bool expNegative = false;
                     if (expPos < len) {
                         char ec = data[expPos];
-                        expNegative = ec == '-';
-                        if (expNegative || ec == '+') {
+                        expNegative = ec == MINUS;
+                        if (expNegative || ec == PLUS) {
                             expPos++;
                         }
                     }
                     int expVal = 0;
                     for (int x = expPos; x < len; x++) {
-                        expVal = expVal * 10 + ReadHexNumber(data[x]);
+                        expVal = expVal * 10 + ReadNumber(data[x]);
                     }
                     if (expNegative) {
                         expVal = -expVal;
@@ -3973,59 +3967,48 @@ namespace ScoredProductions.NanoJson {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsNumber(ReadOnlySpan<char> data) {
-            int len = data.Length;
-            if (len == 0) {
+        public static bool IsNumber(ReadOnlySpan<char> rawData) {
+            if (rawData.IsEmpty) {
                 return false;
             }
-            int index = -1;
+            ReadOnlySpan<ushort> data = MemoryMarshal.Cast<char, ushort>(rawData);
+            int len = data.Length;
+            int index = 0;
             bool dec = false;
             bool EFound = false;
-            ref char firstChar = ref MemoryMarshal.GetReference(data);
-            if (firstChar == '-' || firstChar == '+') {
+            ref ushort firstChar = ref MemoryMarshal.GetReference(data);
+            if (firstChar == MINUS || firstChar == PLUS) {
                 index++;
             }
 
-            while (++index < len) {
-                switch (data[index]) {
-                    case '0':
-                    case '1':
-                    case '2':
-                    case '3':
-                    case '4':
-                    case '5':
-                    case '6':
-                    case '7':
-                    case '8':
-                    case '9': {
-                        continue;
+            while (index < len) {
+                ushort c = data[index++];
+                if (c >= ZERO && c <= NINE) {
+                    continue;
+                }
+                else if (c == STOP) {
+                    if (dec) {
+                        return false;
                     }
-                    case '.': {
-                        if (dec) {
-                            return false;
-                        }
-                        dec = true;
-                        continue;
+                    dec = true;
+                    continue;
+                }
+                else if (c == E_LOWER || c == E_UPPER) {
+                    if (EFound) {
+                        return false;
                     }
-                    case 'e':
-                    case 'E': {
-                        if (EFound) {
-                            return false;
+                    else {
+                        c = data[index++];
+                        if (c == PLUS || c == MINUS) {
+                            EFound = true;
+                            continue;
                         }
                         else {
-                            char c = data[++index];
-                            if ((c ^ '+') == 0 || (c ^ '-') == 0) {
-                                EFound = true;
-                                continue;
-                            }
-                            else {
-                                return false;
-                            }
+                            return false;
                         }
                     }
-                    default:
-                        return false;
                 }
+                return false;
             }
             return true;
         }
