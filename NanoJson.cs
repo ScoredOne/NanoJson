@@ -89,12 +89,9 @@ namespace ScoredProductions.NanoJson {
 
             switch (this.Type) {
                 case JsonType.Array:
-                    this.reader = new JsonReader(this.Value);
-                    this.reader.AdvanceTo(LBRACKET);
-                    break;
                 case JsonType.Object:
                     this.reader = new JsonReader(this.Value);
-                    this.reader.AdvanceTo(LBRACE);
+                    this.reader.SetIndexPosition(0);
                     break;
                 default:
                     this.reader = JsonReader.Empty;
@@ -479,17 +476,15 @@ namespace ScoredProductions.NanoJson {
                     return false;
                 }
             }
-            JsonSpan current;
             do {
-                current = this.Current;
-                valueKey = ComputeHash(current.Key, out valueLen);
+                valueKey = ComputeHash(this.currentKey, out valueLen);
                 if (keyhash == valueKey) {
-                    value = current;
+                    value = this.Current;
                     return true;
                 }
                 else {
                     if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
-                        if (current.TryGetKey(key[++valueLen..], out value)) {
+                        if (this.Current.TryGetKey(key[++valueLen..], out value)) {
                             return true;
                         }
                     }
@@ -499,15 +494,14 @@ namespace ScoredProductions.NanoJson {
                 this.Reset();
                 for (int x = 0; x < endLen; x++) {
                     this.MoveNext();
-                    current = this.Current;
-                    valueKey = ComputeHash(current.Key, out valueLen);
+                    valueKey = ComputeHash(this.currentKey, out valueLen);
                     if (keyhash == valueKey) {
-                        value = current;
+                        value = this.Current;
                         return true;
                     }
                     else {
                         if (pathLen > valueLen && ComputeHash(key.Slice(0, valueLen), out _) == valueKey) {
-                            if (current.TryGetKey(key[++valueLen..], out value)) {
+                            if (this.Current.TryGetKey(key[++valueLen..], out value)) {
                                 return true;
                             }
                         }
@@ -587,9 +581,6 @@ namespace ScoredProductions.NanoJson {
         public override readonly string ToString() => this.ToString(Default_ToStringFormat);
 
         public readonly string ToString(JsonToStringFormat format) {
-            int indent = 0;
-            int pos = 0;
-
             bool translateUnicode = HasFlag((long)format, (long)JsonToStringFormat.TranslateUnicode);
             bool lowerCaseBool = HasFlag((long)format, (long)JsonToStringFormat.LowerCaseBool);
             bool reparseNumbers = HasFlag((long)format, (long)JsonToStringFormat.ReParseNumbers);
@@ -629,6 +620,9 @@ namespace ScoredProductions.NanoJson {
                     return lowerCaseBool ? FALSE_l : FALSE_u;
                 }
             }
+
+            int indent = 0;
+            int pos = 0;
 
             bool pretty = HasFlag((long)format, (long)JsonToStringFormat.Pretty);
             bool tabs = pretty && HasFlag((long)format, (long)JsonToStringFormat.TabCharacterIndent);
@@ -696,10 +690,10 @@ namespace ScoredProductions.NanoJson {
 
                 sb[sbPos++] = '{';
 
-                JsonSpan t = this; // readonly and value copy to retain index search position
-                t.Reset();
-                bool moved = t.MoveNext();
-                if (t.IsEmpty || !moved) {
+                JsonSpan thisCopy = this; // readonly and value copy to retain index search position
+                thisCopy.Reset();
+                bool moved = thisCopy.MoveNext();
+                if (thisCopy.IsEmpty || !moved) {
                     if (pretty) {
                         sb[sbPos++] = ' ';
                     }
@@ -712,7 +706,7 @@ namespace ScoredProductions.NanoJson {
                     sb[sbPos++] = '\n';
 
                     do {
-                        JsonSpan current = t.Current;
+                        JsonSpan current = thisCopy.Current;
                         for (y = indent; --y >= 0;) {
                             indentSpan.CopyTo(sb.Slice(sbPos, indentSpan.Length));
                             sbPos += indentSpan.Length;
@@ -724,7 +718,7 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = ':';
                         sb[sbPos++] = ' ';
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
-                        moved = t.MoveNext();
+                        moved = thisCopy.MoveNext();
                         if (moved) {
                             sb[sbPos++] = ',';
                         }
@@ -739,7 +733,7 @@ namespace ScoredProductions.NanoJson {
                 }
                 else {
                     do {
-                        JsonSpan current = t.Current;
+                        JsonSpan current = thisCopy.Current;
                         sb[sbPos++] = '"';
                         current.Key.CopyTo(sb.Slice(sbPos, current.KeyLen));
                         sbPos += current.KeyLen;
@@ -747,7 +741,7 @@ namespace ScoredProductions.NanoJson {
                         sb[sbPos++] = ':';
                         sb[sbPos++] = ' ';
                         current.ProcessString(true, in pretty, in translateUnicode, in lowerCaseBool, in reparseNumbers, in sb, ref indent, ref sbPos, in indentSpan);
-                        moved = t.MoveNext();
+                        moved = thisCopy.MoveNext();
                         if (moved) {
                             sb[sbPos++] = ',';
                         }
@@ -2427,11 +2421,11 @@ namespace ScoredProductions.NanoJson {
                 case JsonType.Array: // JsonSpan is on demand so this information hasnt been processed so translate as if fresh
                     return ParseJson(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToArray().AsMemory());
                 case JsonType.String:
-                    return CreateString(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToString());
+                    return CreateString(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetStringLiteral);
                 case JsonType.Number:
-                    return CreateNumber(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, double.Parse(data.Value));
+                    return CreateNumber(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetNumber);
                 case JsonType.Boolean:
-                    return CreateBool(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, bool.Parse(data.Value));
+                    return CreateBool(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetBool);
                 default:
                     throw new NotSupportedException();
             }
@@ -2456,11 +2450,11 @@ namespace ScoredProductions.NanoJson {
                 case JsonType.Array: // Inner bodies need re-parsing as the originals reference the same allocated memory and we want it to point to a new area
                     return ParseJson(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToArray().AsMemory());
                 case JsonType.String:
-                    return CreateString(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.Value.ToString());
+                    return CreateString(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetStringLiteral);
                 case JsonType.Number:
-                    return CreateNumber(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, double.Parse(data.GetValueAsSpan));
+                    return CreateNumber(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetNumber);
                 case JsonType.Boolean:
-                    return CreateBool(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, bool.Parse(data.GetValueAsSpan));
+                    return CreateBool(data.Key.IsEmpty ? data.Key.ToArray().AsMemory() : ReadOnlyMemory<char>.Empty, data.GetBool);
                 default:
                     throw new NotSupportedException();
             }
@@ -2809,7 +2803,7 @@ namespace ScoredProductions.NanoJson {
             ReadOnlySpan<Vector<ushort>> vectorData = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(this.CurrentIndex));
             int vectorLen = vectorData.Length;
             for (int x = 0; x < vectorLen; x++) {
-                ref readonly Vector<ushort> current = ref vectorData[x];
+                Vector<ushort> current = vectorData[x];
                 Vector<ushort> eq = Vector.Equals(current, MemoryMarshal.GetReference(searchVectors));
                 for (int y = 1; y < searchLen; y++) {
                     eq |= Vector.Equals(current, searchVectors[y]);
@@ -2852,7 +2846,7 @@ namespace ScoredProductions.NanoJson {
             ReadOnlySpan<Vector<ushort>> vectorData = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(this.CurrentIndex));
             int vectorLen = vectorData.Length;
             for (int x = 0; x < vectorLen; x++) {
-                ref readonly Vector<ushort> current = ref vectorData[x];
+                Vector<ushort> current = vectorData[x];
                 Vector<ushort> eq = Vector.Equals(current, MemoryMarshal.GetReference(searchVectors));
                 for (int y = 1; y < searchLen; y++) {
                     eq |= Vector.Equals(current, searchVectors[y]);
@@ -3012,7 +3006,7 @@ namespace ScoredProductions.NanoJson {
             ReadOnlySpan<Vector<ushort>> vectorData = MemoryMarshal.Cast<ushort, Vector<ushort>>(this.source.Slice(this.CurrentIndex));
             int vectorLen = vectorData.Length;
             for (int x = 0; x < vectorLen; x++) {
-                ref readonly Vector<ushort> current = ref vectorData[x];
+                Vector<ushort> current = vectorData[x];
                 Vector<ushort> eq = Vector.LessThan(current, whitespace)
                     | Vector.Equals(current, commaVector)
                     | Vector.Equals(current, rbracketVector)
@@ -3025,7 +3019,7 @@ namespace ScoredProductions.NanoJson {
                             if ((ushort)chunk > 0) {
                                 int target = this.CurrentIndex + (x * Segment) + (y * 4) + z;
                                 ushort c = this.source[target];
-                                if (c == COMMA || IsWhiteSpace(c) || c == RBRACE || c == RBRACKET) {
+                                if (c == COMMA || c == RBRACE || c == RBRACKET || IsWhiteSpace(c)) {
                                     this.CurrentIndex = target;
                                     return this.CurrentValue;
                                 }
@@ -3037,7 +3031,7 @@ namespace ScoredProductions.NanoJson {
             this.CurrentIndex += (vectorLen * Segment);
             while (this.CurrentIndex <= this.endIndex) {
                 ushort c = this.CurrentValue;
-                if (c == COMMA || IsWhiteSpace(c) || c == RBRACE || c == RBRACKET) {
+                if (c == COMMA || c == RBRACE || c == RBRACKET || IsWhiteSpace(c)) {
                     return this.CurrentValue;
                 }
                 this.CurrentIndex++;
@@ -3067,7 +3061,7 @@ namespace ScoredProductions.NanoJson {
             int vectorLen = vectorData.Length;
             if (WithinQuotes) {
                 for (int x = 0; x < vectorLen; x++) {
-                    ref readonly Vector<ushort> current = ref vectorData[x];
+                    Vector<ushort> current = vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
                         ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
@@ -3090,7 +3084,7 @@ namespace ScoredProductions.NanoJson {
             }
             else {
                 for (int x = 0; x < vectorLen; x++) {
-                    ref readonly Vector<ushort> current = ref vectorData[x];
+                    Vector<ushort> current = vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector)
                         | Vector.Equals(current, lbracketVector)
                         | Vector.Equals(current, rbracketVector)
@@ -3192,7 +3186,7 @@ namespace ScoredProductions.NanoJson {
             int vectorLen = vectorData.Length;
             if (WithinQuotes) {
                 for (int x = 0; x < vectorLen; x++) {
-                    ref readonly Vector<ushort> current = ref vectorData[x];
+                    Vector<ushort> current = vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector);
                     if (Vector.GreaterThanAny(eq, Vector<ushort>.Zero)) {
                         ReadOnlySpan<ulong> bitInterpritation = MemoryMarshal.Cast<Vector<ushort>, ulong>(MemoryMarshal.CreateReadOnlySpan(ref eq, 1));
@@ -3215,7 +3209,7 @@ namespace ScoredProductions.NanoJson {
             }
             else {
                 for (int x = 0; x < vectorLen; x++) {
-                    ref readonly Vector<ushort> current = ref vectorData[x];
+                    Vector<ushort> current = vectorData[x];
                     Vector<ushort> eq = Vector.Equals(current, quoteVector)
                         | Vector.Equals(current, lbracketVector)
                         | Vector.Equals(current, rbracketVector)
